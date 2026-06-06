@@ -8,6 +8,8 @@ dependencies = [
     "google-adk>=0.3.0",
     "google-cloud-firestore>=2.16.0",
     "google-genai>=0.3.0",
+    # Cloud Trace export for ADK's trace_to_cloud observability.
+    "opentelemetry-exporter-gcp-trace>=1.6.0",
 ]
 
 [project.optional-dependencies]
