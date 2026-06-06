@@ -73,3 +73,27 @@ Format: date · decision · rationale · reversible?
   extension, deferred to avoid OAuth-in-Cloud-Run burning build time. Reversible: yes (swap port).
   Verified live: log_outreach scheduled 3B/7B reminders, check_cadence advanced to the next
   contact at day 3.
+
+- **Slice #5 fix — deterministic promotion.** Persisted `rank_index` on OrgRecord so
+  exhaustion promotes the true next-ranked candidate regardless of Firestore read order
+  (was promoting a tied org out of order). Verified live: exhausting Helio Grid promotes
+  Meridian Carbon.
+
+- **Slices #6/#7/#8** — responder classification, grounded TIARA prep (graceful fallback,
+  Resources always present), and post-interview follow-ups. All verified live; #7 TIARA
+  grounded call against a real company returned a grounded brief + 5 categories.
+
+- **Slice #9 — harden + package.**
+  - Cloud Trace enabled (`trace_to_cloud=True`); required adding
+    `opentelemetry-exporter-gcp-trace` (first deploy crash-looped without it — prior revision
+    kept serving, no outage). Granted `roles/cloudtrace.agent` to `advocate-run`.
+  - Guardrails: no-send is structural (test asserts no SMTP/Gmail-send anywhere); LinkedIn/
+    Indeed/Glassdoor/ZipRecruiter scraping blocked in code.
+  - Docs written: ARCHITECTURE, DATA_SOURCES, DEMO_SCRIPT, SUBMISSION; README usage; CHANGELOG.
+
+- **OPEN — outward-facing items (need explicit approval).**
+  1. **Public GitHub repo publish** — no remote configured; publishing is irreversible/outward.
+     Awaiting go-ahead + account/visibility choice.
+  2. **Demo video** — manual recording; script is in docs/DEMO_SCRIPT.md.
+  3. **Public (unauthenticated) Cloud Run access for judges** — currently authenticated-only;
+     making it public was deferred (classifier-gated) and is a separate explicit decision.
