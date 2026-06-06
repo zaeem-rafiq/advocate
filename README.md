@@ -28,7 +28,37 @@ for sourcing). State in Firestore (per-user isolation). Runtime: Cloud Run (scal
 
 ```bash
 uv venv --python 3.12
-uv run --no-project pytest        # pure-code unit tests (ranker, loaders)
+uv pip install pytest pytest-cov google-adk google-cloud-firestore
+uv run --no-project pytest                 # 98 unit tests; pure-code core ~100% covered
+python -m advocate.cli                     # offline deterministic tracer-bullet demo
 ```
 
-See `docs/` for the PRD, plan, and dependency-ordered issues.
+The pure-code core (`advocate/core`) and data/services layers are fully unit-tested with
+no cloud dependency. A live Firestore integration test is opt-in:
+`ADVOCATE_FIRESTORE_IT=1 GOOGLE_CLOUD_PROJECT=agenticprd uv run --no-project pytest tests/test_firestore_integration.py`.
+
+## Calling the deployed agent
+
+The Cloud Run service is authenticated-only. The ADK app name is `advocate_app`.
+
+```bash
+URL=https://advocate-964730889018.us-central1.run.app
+TOK=$(gcloud auth print-identity-token)
+
+# Create a session, then drive the flow (each call returns the agent's events as JSON):
+curl -s -X POST -H "Authorization: Bearer $TOK" \
+  "$URL/apps/advocate_app/users/priya/sessions/s1" -d '{}'
+
+curl -s -X POST -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" \
+  "$URL/run" -d '{"app_name":"advocate_app","user_id":"priya","session_id":"s1",
+    "new_message":{"role":"user","parts":[{"text":"Load the seeded companies, rank them, and show my top 5."}]}}'
+```
+
+## Documentation
+
+- `docs/ARCHITECTURE.md` — agent topology (diagram) + layering
+- `docs/DATA_SOURCES.md` — ToS compliance and the draft-only / no-scrape guarantees
+- `docs/DEMO_SCRIPT.md` — the 1–2 minute demo beat sheet
+- `docs/SUBMISSION.md` — the challenge submission write-up
+- `docs/DECISIONS.md` — autonomous-build decision log
+- `docs/prd-advocate.md` · `docs/plan-advocate.md` · `docs/issues-advocate.md` — source specs
