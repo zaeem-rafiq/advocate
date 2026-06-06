@@ -20,7 +20,11 @@ from advocate.agents.pipeline_tools import (
     set_active_five,
 )
 from advocate.agents.prep_tools import prepare_informational
-from advocate.agents.scheduler_tools import check_cadence, log_outreach
+from advocate.agents.scheduler_tools import (
+    check_cadence,
+    log_outreach,
+    schedule_post_interview_followups,
+)
 from advocate.agents.sourcing import build_sourcing_agent
 from advocate.agents.state_tools import get_pipeline_status, save_pipeline
 from advocate.agents.tools import find_starter_contact, load_seed_companies, rank_companies
@@ -73,6 +77,11 @@ Informational prep:
   (Trends, Insights, Advice, Resources, Assignments). If grounded is false, tell the user the
   research was thin and the questions are general — never present invented company facts.
 
+After the informational:
+- Call `schedule_post_interview_followups` with the company, contact, the date of the
+  conversation, and a one-line note on what was discussed. This schedules a thank-you (24h),
+  a 2-week referral update, and a monthly check-in, each referencing the conversation.
+
 Guardrails you must honor:
 - Never fabricate a company or a contact.
 - Never claim to have sent any email; outreach is always draft-only and human-approved.
@@ -102,6 +111,7 @@ def build_root_agent() -> Agent:
             FunctionTool(func=mark_company_exhausted),
             FunctionTool(func=classify_contact),
             FunctionTool(func=prepare_informational),
+            FunctionTool(func=schedule_post_interview_followups),
         ],
     )
 

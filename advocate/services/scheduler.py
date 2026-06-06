@@ -10,7 +10,7 @@ from dataclasses import dataclass, replace
 from datetime import date
 from typing import List, Optional, Sequence
 
-from advocate.core.cadence import CadenceAction, decide_next, plan_3b7
+from advocate.core.cadence import CadenceAction, decide_next, plan_3b7, plan_followups
 from advocate.core.state import OrgRecord, ScheduledAction
 from advocate.data.repository import PipelineRepository
 from advocate.services.calendar_port import CalendarPort
@@ -57,6 +57,51 @@ def schedule_outreach(
             )
         )
 
+    updated = replace(record, scheduled_actions=record.scheduled_actions + tuple(actions))
+    repo.upsert_org(user_id, updated)
+    return updated
+
+
+_FOLLOWUP_LABELS = {
+    "thank_you": "Thank-you note",
+    "update_2w": "2-week referral update",
+    "checkin_monthly": "Monthly check-in",
+}
+
+
+def schedule_followups(
+    repo: PipelineRepository,
+    calendar: CalendarPort,
+    user_id: str,
+    record: OrgRecord,
+    contact_name: str,
+    informational_date: date,
+    conversation_note: str,
+) -> OrgRecord:
+    """Schedule the thank-you (24h), 2-week update, and monthly check-in reminders.
+
+    Each reminder references the contact and the prior conversation (the Ben Franklin
+    loop). Reuses the calendar port + pipeline persistence from the 3B7 plumbing.
+    """
+    plan = plan_followups(informational_date)
+    actions: List[ScheduledAction] = []
+    for kind, due in plan.items():
+        label = _FOLLOWUP_LABELS[kind]
+        summary = f"Advocate: {label} — {contact_name} at {record.company}"
+        description = (
+            f"{label} for your informational with {contact_name} at {record.company}. "
+            f"Conversation: {conversation_note}"
+        )
+        event = calendar.create_reminder(summary=summary, due_date=due, description=description)
+        actions.append(
+            ScheduledAction(
+                kind=kind,
+                due_date=due.isoformat(),
+                contact_name=contact_name,
+                note=conversation_note,
+                calendar_event_id=event.event_id,
+            )
+        )
     updated = replace(record, scheduled_actions=record.scheduled_actions + tuple(actions))
     repo.upsert_org(user_id, updated)
     return updated

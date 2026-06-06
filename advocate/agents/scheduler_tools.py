@@ -18,7 +18,11 @@ from advocate.core.state import OrgRecord
 from advocate.data.loaders import contacts_for_company, load_contacts
 from advocate.data.repository_factory import get_repository
 from advocate.services.calendar_port import InMemoryCalendar
-from advocate.services.scheduler import evaluate_cadence, schedule_outreach
+from advocate.services.scheduler import (
+    evaluate_cadence,
+    schedule_followups,
+    schedule_outreach,
+)
 
 # Draft-only calendar (no external send). Module-level so reminders accumulate
 # within a process; the durable schedule lives in the persisted ScheduledActions.
@@ -95,3 +99,38 @@ def check_cadence(
         "business_days_elapsed": outcome.business_days_elapsed,
         "message": outcome.message,
     }
+
+
+def schedule_post_interview_followups(
+    company: str,
+    contact_name: str,
+    informational_date: str,
+    conversation_note: str,
+    tool_context: ToolContext,
+) -> dict:
+    """Schedule the thank-you (24h), 2-week update, and monthly check-in after an informational.
+
+    Each reminder references the contact and what was discussed.
+
+    Args:
+        company: the organization.
+        contact_name: who the informational was with.
+        informational_date: ISO date the conversation happened.
+        conversation_note: one line on what was discussed (referenced in each reminder).
+
+    Returns:
+        {"company", "contact", "followups": [{"kind","due_date"}...]}.
+    """
+    repo = get_repository()
+    user = _user_id(tool_context)
+    record = repo.get_org(user, company) or _bootstrap_record(company)
+    updated = schedule_followups(
+        repo, _CALENDAR, user, record, contact_name,
+        date.fromisoformat(informational_date), conversation_note,
+    )
+    followups = [
+        {"kind": a.kind, "due_date": a.due_date}
+        for a in updated.scheduled_actions
+        if a.kind in ("thank_you", "update_2w", "checkin_monthly")
+    ]
+    return {"company": company, "contact": contact_name, "followups": followups}
