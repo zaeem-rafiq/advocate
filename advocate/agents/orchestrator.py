@@ -19,6 +19,7 @@ from advocate.agents.pipeline_tools import (
     mark_company_exhausted,
     set_active_five,
 )
+from advocate.agents.prep_tools import prepare_informational
 from advocate.agents.scheduler_tools import check_cadence, log_outreach
 from advocate.agents.sourcing import build_sourcing_agent
 from advocate.agents.state_tools import get_pipeline_status, save_pipeline
@@ -66,6 +67,12 @@ Pipeline discipline:
 - When a contact responds (or goes silent past the 7-day follow-up), call `classify_contact`
   to label them Booster / Obligate / Curmudgeon so the user knows where to invest.
 
+Informational prep:
+- When the user confirms an informational interview, call `prepare_informational` with the
+  company and target role. Present the grounded research brief and all five TIARA questions
+  (Trends, Insights, Advice, Resources, Assignments). If grounded is false, tell the user the
+  research was thin and the questions are general — never present invented company facts.
+
 Guardrails you must honor:
 - Never fabricate a company or a contact.
 - Never claim to have sent any email; outreach is always draft-only and human-approved.
@@ -94,6 +101,7 @@ def build_root_agent() -> Agent:
             FunctionTool(func=set_active_five),
             FunctionTool(func=mark_company_exhausted),
             FunctionTool(func=classify_contact),
+            FunctionTool(func=prepare_informational),
         ],
     )
 
