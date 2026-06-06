@@ -14,6 +14,11 @@ from google.adk.tools.agent_tool import AgentTool
 
 from advocate.agents.config import ROUTINE_MODEL
 from advocate.agents.drafting import draft_outreach_email
+from advocate.agents.pipeline_tools import (
+    classify_contact,
+    mark_company_exhausted,
+    set_active_five,
+)
 from advocate.agents.scheduler_tools import check_cadence, log_outreach
 from advocate.agents.sourcing import build_sourcing_agent
 from advocate.agents.state_tools import get_pipeline_status, save_pipeline
@@ -54,6 +59,13 @@ Outreach (after the user picks a company from the top 5):
     (returned as next_contact) and draft the next outreach; no reply by day 7 -> prompt a
     gentle follow-up to contact #1. A response short-circuits to scheduling the conversation.
 
+Pipeline discipline:
+- After ranking, call `set_active_five` with the full ranked list to keep exactly five orgs
+  ACTIVE. When the user exhausts all contacts at a company, call `mark_company_exhausted` to
+  promote the next-ranked org into the active five.
+- When a contact responds (or goes silent past the 7-day follow-up), call `classify_contact`
+  to label them Booster / Obligate / Curmudgeon so the user knows where to invest.
+
 Guardrails you must honor:
 - Never fabricate a company or a contact.
 - Never claim to have sent any email; outreach is always draft-only and human-approved.
@@ -79,6 +91,9 @@ def build_root_agent() -> Agent:
             FunctionTool(func=get_pipeline_status),
             FunctionTool(func=log_outreach),
             FunctionTool(func=check_cadence),
+            FunctionTool(func=set_active_five),
+            FunctionTool(func=mark_company_exhausted),
+            FunctionTool(func=classify_contact),
         ],
     )
 

@@ -23,6 +23,7 @@ def org_record_to_dict(record: OrgRecord) -> Dict[str, Any]:
         "has_alumni": record.has_alumni,
         "contacts": [asdict(c) for c in record.contacts],
         "scheduled_actions": [asdict(a) for a in record.scheduled_actions],
+        "rank_index": record.rank_index,
     }
 
 
@@ -38,4 +39,5 @@ def org_record_from_dict(data: Dict[str, Any]) -> OrgRecord:
         scheduled_actions=tuple(
             ScheduledAction(**a) for a in data.get("scheduled_actions", []) or []
         ),
+        rank_index=data.get("rank_index"),
     )
