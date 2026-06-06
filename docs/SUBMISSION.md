@@ -37,7 +37,7 @@ See `docs/ARCHITECTURE.md` (diagram + layering). Tests: `uv run --no-project pyt
 (98 unit tests; pure-code core ~100% covered).
 
 ## Links
-- **Repo:** <PUBLIC_REPO_URL — to be filled at publish>
+- **Repo:** https://github.com/zaeem-rafiq/advocate (private for review — flip to public before submitting)
 - **Demo video (1–2 min):** <VIDEO_URL — to be recorded; script in docs/DEMO_SCRIPT.md>
 - **Live service:** Cloud Run `advocate` (authenticated-only).
 
