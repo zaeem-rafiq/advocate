@@ -8,10 +8,10 @@ from __future__ import annotations
 
 from typing import List
 
-from advocate.agents.config import COMPANIES_CSV
+from advocate.agents.config import COMPANIES_CSV, CONTACTS_CSV
 from advocate.core.models import Org
 from advocate.core.ranker import top_n
-from advocate.data.loaders import load_companies
+from advocate.data.loaders import contacts_for_company, load_companies, load_contacts
 
 
 def rank_companies(companies: List[dict]) -> dict:
@@ -80,3 +80,31 @@ def load_seed_companies() -> dict:
         for o in orgs
     ]
     return {"companies": companies, "count": len(companies)}
+
+
+def find_starter_contact(company: str) -> dict:
+    """Find a starter networking contact at a company from the connected source.
+
+    Prefers an alumni connection (the warmest path). Returns contact details and a
+    suggested `connection` phrase for the drafting tool. Never fabricates a contact.
+
+    Args:
+        company: the organization to find a contact at.
+
+    Returns:
+        {"found": True, "contact_name", "title", "is_alum", "connection"} or
+        {"found": False} if the connected source has no contact there.
+    """
+    contacts = contacts_for_company(load_contacts(CONTACTS_CSV), company)
+    if not contacts:
+        return {"found": False}
+    # Prefer an alum; otherwise take the first listed contact.
+    contact = next((c for c in contacts if c.is_alum), contacts[0])
+    connection = "fellow Columbia Business School alum" if contact.is_alum else f"shared interest in {company}"
+    return {
+        "found": True,
+        "contact_name": contact.name,
+        "title": contact.title,
+        "is_alum": contact.is_alum,
+        "connection": connection,
+    }
