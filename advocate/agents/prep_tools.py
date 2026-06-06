@@ -7,6 +7,8 @@ than fabricating company-specific detail.
 """
 from __future__ import annotations
 
+import re
+
 from advocate.agents.config import LOCATION, PROJECT, SOURCING_MODEL, USE_VERTEX
 from advocate.core.tiara import ensure_tiara, fallback_questions, parse_tiara_text
 
@@ -73,6 +75,8 @@ def prepare_informational(company: str, role: str) -> dict:
             "grounded": False,
         }
 
-    brief = text.split("QUESTIONS:", 1)[0].replace("BRIEF:", "").strip()
+    # Brief is everything before the QUESTIONS block, minus any markdown "BRIEF" header.
+    raw_brief = re.split(r"(?i)\bQUESTIONS\b", text, maxsplit=1)[0]
+    brief = re.sub(r"(?im)^[#*\s]*BRIEF[#*:\s]*", "", raw_brief).strip()
     questions = ensure_tiara(parse_tiara_text(text))
     return {"company": company, "brief": brief or company, "questions": questions, "grounded": True}

@@ -52,8 +52,11 @@ def parse_tiara_text(text: str) -> Dict[str, str]:
     for category in TIARA_CATEGORIES:
         pattern = rf"(?im)^\s*[-*\d.\)\s]*{category}\s*[:\-]\s*(.+?)\s*$"
         match = re.search(pattern, text or "")
-        if match and match.group(1).strip():
-            found[category] = match.group(1).strip()
+        if match:
+            # Strip residual markdown emphasis/bullets from the captured question.
+            question = match.group(1).strip().strip("*").strip("# ").strip()
+            if question:
+                found[category] = question
     return found
 
 

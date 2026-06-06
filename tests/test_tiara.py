@@ -81,6 +81,13 @@ def test_parse_labeled_model_output():
     assert parsed["Assignments"] == "What project could I study?"
 
 
+def test_parse_strips_markdown_emphasis():
+    text = "Resources:** Who else should I meet? **\n**Trends:** What is shifting?"
+    parsed = parse_tiara_text(text)
+    assert parsed["Resources"] == "Who else should I meet?"
+    assert parsed["Trends"] == "What is shifting?"
+
+
 def test_parse_then_ensure_backfills_partial_output():
     text = "Trends: What's shifting in EV fleets?\nResources: Who should I talk to?"
     filled = ensure_tiara(parse_tiara_text(text))
