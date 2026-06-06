@@ -26,3 +26,15 @@ Format: date · decision · rationale · reversible?
   offline/unit-tested; the actual Cloud Run deploy pauses at the deploy gate pending a dedicated
   project ID + billing budget alert. IRREVERSIBLE-ADJACENT → will stop and ask before creating a
   project or deploying.
+
+- **Slice #1 COMPLETE (code + local validation), DEPLOY PENDING.** Pure-code core green
+  (21 tests, ranker 100%), ADK agents construct, Cloud Run FastAPI app builds, offline CLI
+  demos the tracer bullet deterministically. Stopped at the deploy gate per the working
+  agreement — need a dedicated GCP project + billing budget alert before `gcloud run deploy`.
+
+- **Git: local branches + commits only; no GitHub remote / PRs yet.** Brief asks for branch+PR
+  per slice, but publishing a public GitHub repo is outward-facing (a Phase-4 DoD item).
+  Proceeding with local `slice/N-*` branches; will create + push the public repo at the
+  packaging gate (#9) with explicit approval. Reversible: yes.
+
+- **`orchestrator-data/` gitignored** — dispatch/Linear launchd metadata, not product code.
