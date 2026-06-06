@@ -36,3 +36,6 @@ class OrgRecord:
     has_alumni: bool
     contacts: Tuple[Contact, ...] = field(default_factory=tuple)
     scheduled_actions: Tuple[ScheduledAction, ...] = field(default_factory=tuple)
+    # Position in the original M->P->A ranking (0 = top). Used to promote the
+    # next-ranked candidate deterministically, independent of storage read order.
+    rank_index: Optional[int] = None

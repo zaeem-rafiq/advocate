@@ -14,19 +14,32 @@ from google.adk.tools.tool_context import ToolContext
 
 from advocate.agents.config import CONTACTS_CSV
 from advocate.agents.state_tools import _user_id
-from advocate.core.active_five import initialize_active, mark_exhausted
+from advocate.core.active_five import ACTIVE_LIMIT, active_count, initialize_active
 from advocate.core.classification import classify_responder
 from advocate.core.models import Org, OrgStatus
-from advocate.core.ranker import rank
 from advocate.core.state import OrgRecord
 from advocate.data.loaders import contacts_for_company, load_contacts
 from advocate.data.repository_factory import get_repository
 
 
-def _record_to_org(r: OrgRecord) -> Org:
-    return Org(company=r.company, domain="", sector="", location="",
-               has_alumni=r.has_alumni, posting_score=r.posting_score,
-               motivation=r.motivation, status=r.status)
+def _promote_by_rank_index(records: List[OrgRecord], exhausted: str) -> List[OrgRecord]:
+    """Mark `exhausted` EXHAUSTED and promote the lowest-rank_index CANDIDATE.
+
+    Deterministic regardless of the order records arrive from storage: promotion
+    always picks the candidate with the smallest rank_index (the next-ranked org).
+    Returns new records; inputs are not mutated.
+    """
+    result = [replace(r, status=OrgStatus.EXHAUSTED) if r.company == exhausted else r
+              for r in records]
+    was_active = any(r.company == exhausted and r.status == OrgStatus.ACTIVE for r in records)
+    if was_active and active_count(result) < ACTIVE_LIMIT:
+        candidates = [r for r in result if r.status == OrgStatus.CANDIDATE]
+        if candidates:
+            # None rank_index sorts last so explicitly-ranked candidates win.
+            nxt = min(candidates, key=lambda r: (r.rank_index is None, r.rank_index or 0))
+            result = [replace(r, status=OrgStatus.ACTIVE) if r.company == nxt.company else r
+                      for r in result]
+    return result
 
 
 def set_active_five(companies: List[dict], tool_context: ToolContext) -> dict:
@@ -51,15 +64,15 @@ def set_active_five(companies: List[dict], tool_context: ToolContext) -> dict:
         for c in companies
     ]
     initialized = initialize_active(orgs)
-    for o in initialized:
+    for idx, o in enumerate(initialized):
         existing = repo.get_org(user, o.company)
         if existing:
-            repo.upsert_org(user, replace(existing, status=o.status))
+            repo.upsert_org(user, replace(existing, status=o.status, rank_index=idx))
         else:
             repo.upsert_org(user, OrgRecord(company=o.company, status=o.status,
                                             motivation=o.motivation,
                                             posting_score=o.posting_score,
-                                            has_alumni=o.has_alumni))
+                                            has_alumni=o.has_alumni, rank_index=idx))
     return {
         "active": [o.company for o in initialized if o.status == OrgStatus.ACTIVE],
         "candidates": [o.company for o in initialized if o.status == OrgStatus.CANDIDATE],
@@ -74,22 +87,21 @@ def mark_company_exhausted(company: str, tool_context: ToolContext) -> dict:
     """
     repo = get_repository()
     user = _user_id(tool_context)
-    records = {r.company: r for r in repo.list_orgs(user)}
+    records = repo.list_orgs(user)
     if not records:
         return {"exhausted": company, "active": [], "promoted": None}
 
-    ranked = rank([_record_to_org(r) for r in records.values()])
-    before_active = {o.company for o in ranked if o.status == OrgStatus.ACTIVE}
-    after = mark_exhausted(ranked, company)
-    after_active = {o.company for o in after if o.status == OrgStatus.ACTIVE}
+    before = {r.company: r for r in records}
+    before_active = {r.company for r in records if r.status == OrgStatus.ACTIVE}
+    after = _promote_by_rank_index(records, company)
+    after_active = {r.company for r in after if r.status == OrgStatus.ACTIVE}
 
-    # Persist only changed statuses, preserving contacts/scheduled actions.
-    for o in after:
-        rec = records[o.company]
-        if rec.status != o.status:
-            repo.upsert_org(user, replace(rec, status=o.status))
+    # Persist only changed statuses, preserving contacts/scheduled actions/rank_index.
+    for r in after:
+        if before[r.company].status != r.status:
+            repo.upsert_org(user, r)
 
-    promoted = (after_active - before_active)
+    promoted = after_active - before_active
     return {
         "exhausted": company,
         "active": sorted(after_active),
