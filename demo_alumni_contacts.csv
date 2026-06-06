@@ -1,0 +1,19 @@
+company,company_domain,contact_name,title,function,seniority,cbs_grad_year,location,email,linkedin_handle,is_cbs_alum,response_archetype,response_latency_days,notes
+Helio Grid,heliogrid.com,Maya Okonkwo,Director of Product,Product,Director,2021,"New York, NY",maya.okonkwo@heliogrid.com,in/maya-okonkwo-4100,Y,Booster,2,synthetic demo record
+Helio Grid,heliogrid.com,Carlos Mendez,Group Product Manager,Product,Manager,2020,"New York, NY",carlos.mendez@heliogrid.com,in/carlos-mendez-4107,Y,Booster,2,synthetic demo record
+Verdant Mobility,verdantmobility.com,Diego Salcedo,Senior Product Manager,Product,Manager,2022,"Brooklyn, NY",diego.salcedo@verdantmobility.com,in/diego-salcedo-4114,Y,Booster,1,synthetic demo record
+Verdant Mobility,verdantmobility.com,Sofia Russo,Director of Product,Product,Director,2019,"Brooklyn, NY",sofia.russo@verdantmobility.com,in/sofia-russo-4121,Y,Booster,3,synthetic demo record
+CarbonLedger,carbonledger.io,Priyanka Rao,Head of Product,Product,VP,2019,"New York, NY",priyanka.rao@carbonledger.io,in/priyanka-rao-4128,Y,Obligate,12,synthetic demo record
+Tidewater Renewables,tidewaterrenewables.com,Liam Brennan,Product Lead,Product,Manager,2020,"Boston, MA",liam.brennan@tidewaterrenewables.com,in/liam-brennan-4135,Y,Booster,3,synthetic demo record
+Lumen Battery,lumenbattery.com,Aisha Haddad,Director of Operations,Operations,Director,2018,"Jersey City, NJ",aisha.haddad@lumenbattery.com,in/aisha-haddad-4142,Y,Curmudgeon,,synthetic demo record
+GridPilot,gridpilot.ai,Sam Whitfield,Product Manager,Product,Manager,2023,"New York, NY",sam.whitfield@gridpilot.ai,in/sam-whitfield-4149,Y,Booster,2,synthetic demo record
+GridPilot,gridpilot.ai,Yuki Tanaka,Product Manager,Product,Manager,2022,"New York, NY",yuki.tanaka@gridpilot.ai,in/yuki-tanaka-4156,Y,Obligate,11,synthetic demo record
+Cyclewise,cyclewise.com,Renata Costa,Senior Product Manager,Product,Manager,2021,"New York, NY",renata.costa@cyclewise.com,in/renata-costa-4163,Y,Obligate,15,synthetic demo record
+Beacon Climate,beaconclimate.org,Thomas Njoroge,Policy & Programs Lead,Operations,Manager,2020,"Washington, DC",thomas.njoroge@beaconclimate.org,in/thomas-njoroge-4170,Y,Booster,3,synthetic demo record
+Cobalt & Co,cobaltandco.com,Hannah Liebowitz,Engagement Manager,Consulting,Manager,2022,"New York, NY",hannah.liebowitz@cobaltandco.com,in/hannah-liebowitz-4177,Y,Obligate,9,synthetic demo record
+Meridian Carbon,meridiancarbon.com,Felix Andersson,VP of Product,Product,VP,2017,"New York, NY",felix.andersson@meridiancarbon.com,in/felix-andersson-4184,Y,Curmudgeon,,synthetic demo record
+Voltaiq Mobility,voltaiqmobility.com,Grace Kim,Group Product Manager,Product,Director,2019,"New York, NY",grace.kim@voltaiqmobility.com,in/grace-kim-4191,Y,Booster,1,synthetic demo record
+Greenhaus Real Estate,greenhausre.com,Omar Farouk,Director of Strategy,Strategy,Director,2020,"New York, NY",omar.farouk@greenhausre.com,in/omar-farouk-4198,Y,Obligate,18,synthetic demo record
+Solaria Homes,solariahomes.com,Bianca Moreau,Senior Product Manager,Product,Manager,2022,"Newark, NJ",bianca.moreau@solariahomes.com,in/bianca-moreau-4205,Y,Booster,2,synthetic demo record
+Helix Renewables,helixrenewables.com,Daniel Petrov,Head of Product,Product,VP,2018,"New York, NY",daniel.petrov@helixrenewables.com,in/daniel-petrov-4212,Y,Booster,3,synthetic demo record
+Canopy Logistics,canopylogistics.com,Naomi Schwartz,Product Operations Lead,Product,Manager,2021,"New York, NY",naomi.schwartz@canopylogistics.com,in/naomi-schwartz-4219,Y,Curmudgeon,,synthetic demo record

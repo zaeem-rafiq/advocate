@@ -1,0 +1,25 @@
+company,company_domain,sector,location,has_alumni,demo_posting_score,demo_motivation,notes
+Helio Grid,heliogrid.com,Solar / energy software,"New York, NY",Y,3,5,posting_score & motivation are demo stand-ins
+Verdant Mobility,verdantmobility.com,EV fleet,"Brooklyn, NY",Y,3,5,posting_score & motivation are demo stand-ins
+CarbonLedger,carbonledger.io,Carbon accounting SaaS,"New York, NY",Y,2,4,posting_score & motivation are demo stand-ins
+Aether Materials,aethermaterials.com,Green materials,"Newark, NJ",N,2,2,posting_score & motivation are demo stand-ins
+Tidewater Renewables,tidewaterrenewables.com,Offshore wind,"Boston, MA",Y,3,4,posting_score & motivation are demo stand-ins
+Lumen Battery,lumenbattery.com,Energy storage,"Jersey City, NJ",Y,1,3,posting_score & motivation are demo stand-ins
+Foresta Capital,forestacapital.com,Climate VC,"New York, NY",N,1,4,posting_score & motivation are demo stand-ins
+GridPilot,gridpilot.ai,Grid optimization,"New York, NY",Y,3,5,posting_score & motivation are demo stand-ins
+Cyclewise,cyclewise.com,Circular-economy retail,"New York, NY",Y,2,3,posting_score & motivation are demo stand-ins
+Solstice Foods,solsticefoods.com,Alt-protein,"New York, NY",N,2,2,posting_score & motivation are demo stand-ins
+Beacon Climate,beaconclimate.org,Climate policy nonprofit,"Washington, DC",Y,2,3,posting_score & motivation are demo stand-ins
+Northwind Energy,northwindenergy.com,Utility-scale wind,"Chicago, IL",N,1,2,posting_score & motivation are demo stand-ins
+Cobalt & Co,cobaltandco.com,Sustainability consulting,"New York, NY",Y,2,3,posting_score & motivation are demo stand-ins
+Meridian Carbon,meridiancarbon.com,Carbon removal,"New York, NY",Y,3,4,posting_score & motivation are demo stand-ins
+PureFlow Water,pureflowwater.com,Water tech,"Austin, TX",N,1,2,posting_score & motivation are demo stand-ins
+Voltaiq Mobility,voltaiqmobility.com,Charging infrastructure,"New York, NY",Y,3,5,posting_score & motivation are demo stand-ins
+Greenhaus Real Estate,greenhausre.com,Sustainable real estate,"New York, NY",Y,2,3,posting_score & motivation are demo stand-ins
+Terra Analytics,terraanalytics.io,Climate data,Remote,N,2,3,posting_score & motivation are demo stand-ins
+Solaria Homes,solariahomes.com,Residential solar,"Newark, NJ",Y,2,4,posting_score & motivation are demo stand-ins
+EcoVantage,ecovantage.com,ESG advisory,"New York, NY",N,1,2,posting_score & motivation are demo stand-ins
+Helix Renewables,helixrenewables.com,Diversified renewables,"New York, NY",Y,3,4,posting_score & motivation are demo stand-ins
+BluePeak Ventures,bluepeakvc.com,Impact VC,"San Francisco, CA",N,1,3,posting_score & motivation are demo stand-ins
+Canopy Logistics,canopylogistics.com,Green supply chain,"New York, NY",Y,2,3,posting_score & motivation are demo stand-ins
+Atlas Climate Tech,atlasclimatetech.com,Climate platform,Remote,N,2,3,posting_score & motivation are demo stand-ins

@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.env
+.env.*
+!.env.example
+*-key.json
+service-account*.json
+.DS_Store
+.claude/skill-usage.log
+uv.lock
+orchestrator-data/
