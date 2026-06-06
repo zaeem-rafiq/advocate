@@ -14,6 +14,7 @@ from google.adk.tools.agent_tool import AgentTool
 
 from advocate.agents.config import ROUTINE_MODEL
 from advocate.agents.drafting import draft_outreach_email
+from advocate.agents.scheduler_tools import check_cadence, log_outreach
 from advocate.agents.sourcing import build_sourcing_agent
 from advocate.agents.state_tools import get_pipeline_status, save_pipeline
 from advocate.agents.tools import find_starter_contact, load_seed_companies, rank_companies
@@ -47,6 +48,12 @@ Outreach (after the user picks a company from the top 5):
 8. Present the drafted email as a DRAFT for the user to approve. Make clear nothing is
    sent automatically.
 
+3B7 cadence (after the user approves and sends an outreach):
+9. Call `log_outreach` to schedule the 3-business-day and 7-business-day reminders.
+10. Use `check_cadence` to see what is due: no reply by day 3 -> surface the next contact
+    (returned as next_contact) and draft the next outreach; no reply by day 7 -> prompt a
+    gentle follow-up to contact #1. A response short-circuits to scheduling the conversation.
+
 Guardrails you must honor:
 - Never fabricate a company or a contact.
 - Never claim to have sent any email; outreach is always draft-only and human-approved.
@@ -70,6 +77,8 @@ def build_root_agent() -> Agent:
             FunctionTool(func=draft_outreach_email),
             FunctionTool(func=save_pipeline),
             FunctionTool(func=get_pipeline_status),
+            FunctionTool(func=log_outreach),
+            FunctionTool(func=check_cadence),
         ],
     )
 

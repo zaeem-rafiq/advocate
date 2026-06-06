@@ -64,3 +64,12 @@ Format: date · decision · rationale · reversible?
   - State path: `users/{user_id}/companies/{company}` → structural per-user isolation.
   - Verified live through the deployed agent: save_pipeline wrote 5 orgs, a NEW session for the
     same user read all 5 back (cross-session persistence), a different user saw 0 (isolation).
+
+- **Slice #4 — 3B7 cadence. Calendar = draft-only in-memory fallback for now.** The brief
+  explicitly sanctions a draft-only Calendar fallback if auth is unstable. Reminders are created
+  via a `CalendarPort`; the `InMemoryCalendar` records them and performs NO external send. The
+  durable proof of the 3B7 schedule is the persisted `ScheduledAction`s in Firestore (due dates,
+  weekend-skipped). A Google Calendar (MCP) adapter implementing the same port is a documented
+  extension, deferred to avoid OAuth-in-Cloud-Run burning build time. Reversible: yes (swap port).
+  Verified live: log_outreach scheduled 3B/7B reminders, check_cadence advanced to the next
+  contact at day 3.
