@@ -29,4 +29,9 @@ addopts = "-q"
 
 [tool.coverage.run]
 source = ["advocate"]
-omit = ["advocate/app.py", "advocate/agents/*"]
+omit = [
+    "advocate/app.py",
+    "advocate/agents/*",
+    # Live adapter: verified by the opt-in Firestore integration test, not unit coverage.
+    "advocate/data/firestore_repo.py",
+]

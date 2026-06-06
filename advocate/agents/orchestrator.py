@@ -15,6 +15,7 @@ from google.adk.tools.agent_tool import AgentTool
 from advocate.agents.config import ROUTINE_MODEL
 from advocate.agents.drafting import draft_outreach_email
 from advocate.agents.sourcing import build_sourcing_agent
+from advocate.agents.state_tools import get_pipeline_status, save_pipeline
 from advocate.agents.tools import find_starter_contact, load_seed_companies, rank_companies
 
 ORCHESTRATOR_INSTRUCTION = """
@@ -32,7 +33,9 @@ Flow for building the target list (LAMP):
    Motivation -> Posting -> Alumni ranking. NEVER reorder companies yourself —
    ranking is pure code.
 5. Present the top 5, noting each company's motivation, posting signal, and whether
-   the user has an alumni connection there.
+   the user has an alumni connection there. Then call `save_pipeline` with the top 5
+   so the pipeline persists across sessions. Use `get_pipeline_status` to recall a
+   returning user's saved pipeline.
 
 Outreach (after the user picks a company from the top 5):
 6. Call `find_starter_contact` for the chosen company to get a real contact and the
@@ -65,6 +68,8 @@ def build_root_agent() -> Agent:
             FunctionTool(func=load_seed_companies),
             FunctionTool(func=find_starter_contact),
             FunctionTool(func=draft_outreach_email),
+            FunctionTool(func=save_pipeline),
+            FunctionTool(func=get_pipeline_status),
         ],
     )
 

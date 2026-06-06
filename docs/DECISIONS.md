@@ -54,3 +54,13 @@ Format: date · decision · rationale · reversible?
   - **Grounded ≥40 sourcing path is wired** (Sourcing agent has `google_search`, Gemini Pro)
     but slice #1 was demoed via the deterministic seed-load path; the live grounded query is
     nondeterministic + costs Pro tokens, so it'll be exercised lightly during the #9 demo prep.
+
+- **Slice #3 — Firestore (user-approved choices).**
+  - Named Firestore DB **`advocate`** (firestore-native, `us-central1`) on agenticprd.
+  - **Dedicated runtime SA `advocate-run@agenticprd.iam.gserviceaccount.com`** (user chose this
+    over widening the shared compute SA) with ONLY `roles/datastore.user` +
+    `roles/aiplatform.user`. Cloud Run service redeployed with `--service-account` = this SA.
+    Least-privilege, isolated identity; never touched the shared compute SA / prd-agent-ui.
+  - State path: `users/{user_id}/companies/{company}` → structural per-user isolation.
+  - Verified live through the deployed agent: save_pipeline wrote 5 orgs, a NEW session for the
+    same user read all 5 back (cross-session persistence), a different user saw 0 (isolation).
