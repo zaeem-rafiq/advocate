@@ -135,5 +135,18 @@ Format: date · decision · rationale · reversible?
   49 routes). The 2.0 "don't share persistent storage with 1.x" warning does NOT apply here —
   ADK sessions are in-memory (no `session_service_uri`) and Firestore holds only app-domain state
   behind `PipelineRepository`, which ADK never touches. Reversible: yes (re-pin to `<2.0.0`).
-  NOTE: prod redeploy on 2.x not yet done — the live Cloud Run revision still runs the
-  pre-migration build.
+- **Prod redeployed on ADK 2.x.** `gcloud run deploy advocate --source . --project agenticprd
+  --region us-central1 --service-account advocate-run@… --no-allow-unauthenticated --set-env-vars
+  GOOGLE_GENAI_USE_VERTEXAI=TRUE,GOOGLE_CLOUD_PROJECT=agenticprd,GOOGLE_CLOUD_LOCATION=us-central1`.
+  New revision **advocate-00013-vp6** (image `sha256:aa994894…`) serves 100% traffic; SA, the three
+  env vars, and authenticated-only ingress all preserved (verified: no `allUsers` binding). Functional
+  smoke passed: authenticated `GET /list-apps → 200 ["advocate_app"]`. Added a `.gcloudignore`
+  (`#!include:.gitignore` + `.claude/ .git/ docs/ tests/ …`) so `--source` no longer uploads the 123M
+  `.claude/` worktree tree / venvs to Cloud Build.
+- **OPEN — Cloud Trace export failing (`PERMISSION_DENIED`), non-fatal.** Logs show
+  `Permission 'cloudtrace.traces.patch' denied on resource '//logging.googleapis.com/projects/agenticprd'`
+  despite the Cloud Trace API being enabled AND `advocate-run` holding `roles/cloudtrace.agent`. So it
+  is NOT a permission dropped by the migration — IAM/API are correctly configured; the odd
+  `logging.googleapis.com` resource container points to an attribution/quota-project issue, and it most
+  likely predates the migration on the 1.x revision. App is unaffected (serves normally); only
+  `trace_to_cloud` observability is degraded. To investigate separately.
