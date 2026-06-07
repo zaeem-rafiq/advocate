@@ -13,8 +13,8 @@ module fully unit-testable without a cloud.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
-from typing import Iterable, List, Tuple
+from dataclasses import dataclass, replace
+from typing import AbstractSet, Iterable, List, Tuple
 
 from advocate.core.research import Feedback
 
@@ -26,6 +26,13 @@ LAMP_LENSES: Tuple[str, ...] = (
     "active_postings",
     "trends",
 )
+
+# Posting Activity (the "P" in the M→P→A ranker, scale 1–3 per PRD R-1). An org
+# surfaced via the active_postings lens (PRD S-2(d): "companies with active relevant
+# postings / growth signals") carries a grounded posting signal; we can't quantify
+# intensity from grounding, so it's a flat mid-high score. Every other lens has NO
+# hiring evidence → 0 (no signal, mirroring how Alumni defaults to 0 — PRD Edge Case 2).
+POSTING_SCORE_ACTIVE = 2
 
 # Human-readable gap descriptions per lens, used to template follow-up search queries
 # when a lens is empty (or the count is short and we broaden across all of them).
@@ -54,13 +61,18 @@ class SourcedOrg:
     lens: str = ""
 
     def to_rank_dict(self) -> dict:
-        """The `rank_companies` dict shape (no lens, no motivation — the user scores later)."""
+        """The `rank_companies` dict shape (no lens, no motivation — the user scores later).
+
+        `posting_score` is derived from the lens (active_postings → POSTING_SCORE_ACTIVE,
+        else 0); `has_alumni` carries whatever `resolve_alumni` set from the user's CSV.
+        """
         return {
             "company": self.company,
             "domain": self.domain,
             "sector": self.sector,
             "location": self.location,
             "has_alumni": self.has_alumni,
+            "posting_score": POSTING_SCORE_ACTIVE if self.lens == "active_postings" else 0,
         }
 
 
@@ -175,3 +187,25 @@ def coverage_feedback(
     if missing:
         parts.append(f"missing lenses: {', '.join(missing)}")
     return Feedback(grade="fail", comment="; ".join(parts), follow_up_queries=queries)
+
+
+def resolve_alumni(
+    orgs: Iterable[SourcedOrg], alum_keys: AbstractSet[str]
+) -> Tuple[SourcedOrg, ...]:
+    """Set `has_alumni=True` for orgs the user has an alum at (PRD S-5: user CSV only).
+
+    `alum_keys` is a set of casefolded company names AND domains drawn from the user's
+    contacts CSV (the I/O lives in the agent layer so this stays pure). An org matches by
+    normalized company name OR non-empty domain. An already-True flag is preserved; a flag
+    is never flipped True→False (no match just leaves it 0, per PRD Edge Case 2).
+    """
+    out: List[SourcedOrg] = []
+    for o in orgs:
+        if o.has_alumni:
+            out.append(o)
+            continue
+        name = o.company.strip().casefold()
+        domain = o.domain.strip().casefold()
+        matched = name in alum_keys or (bool(domain) and domain in alum_keys)
+        out.append(replace(o, has_alumni=True) if matched else o)
+    return tuple(out)

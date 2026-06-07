@@ -14,10 +14,12 @@ import pytest
 
 from advocate.core.sourcing import (
     LAMP_LENSES,
+    POSTING_SCORE_ACTIVE,
     SourcedOrg,
     coverage_feedback,
     merge_orgs,
     parse_orgs,
+    resolve_alumni,
 )
 
 # --- pure core: parse_orgs ------------------------------------------------------
@@ -70,13 +72,50 @@ def test_parse_orgs_clears_unknown_lens():
     assert parse_orgs(raw)[0].lens == ""
 
 
-def test_to_rank_dict_drops_lens_and_omits_motivation():
+def test_to_rank_dict_drops_lens_omits_motivation_and_derives_posting():
     o = SourcedOrg(company="Acme", domain="acme.com", sector="Aero",
                    location="LA", has_alumni=True, lens="dream_peers")
     assert o.to_rank_dict() == {
         "company": "Acme", "domain": "acme.com", "sector": "Aero",
-        "location": "LA", "has_alumni": True,
+        "location": "LA", "has_alumni": True, "posting_score": 0,  # non-active lens → 0
     }
+
+
+def test_to_rank_dict_posting_score_from_active_postings_lens():
+    active = SourcedOrg(company="Acme", lens="active_postings")
+    assert active.to_rank_dict()["posting_score"] == POSTING_SCORE_ACTIVE
+    for lens in ("dream_peers", "alumni_employers", "trends", ""):
+        assert SourcedOrg(company="X", lens=lens).to_rank_dict()["posting_score"] == 0
+
+
+# --- pure core: resolve_alumni (S-5: alumni from the user's CSV only) -----------
+
+
+def test_resolve_alumni_sets_flag_on_company_name_match():
+    orgs = (SourcedOrg(company="Helio Grid"), SourcedOrg(company="Ramp"))
+    out = resolve_alumni(orgs, {"helio grid"})
+    assert [o.has_alumni for o in out] == [True, False]
+
+
+def test_resolve_alumni_matches_on_domain_too():
+    orgs = (SourcedOrg(company="Helio Grid Inc", domain="heliogrid.com"),)
+    out = resolve_alumni(orgs, {"heliogrid.com"})  # name differs, domain matches
+    assert out[0].has_alumni is True
+
+
+def test_resolve_alumni_is_case_insensitive():
+    out = resolve_alumni((SourcedOrg(company="HELIO grid"),), {"helio grid"})
+    assert out[0].has_alumni is True
+
+
+def test_resolve_alumni_no_match_leaves_flag_false():
+    out = resolve_alumni((SourcedOrg(company="Ramp", domain="ramp.com"),), {"helio grid"})
+    assert out[0].has_alumni is False
+
+
+def test_resolve_alumni_never_flips_true_to_false():
+    out = resolve_alumni((SourcedOrg(company="Ramp", has_alumni=True),), set())
+    assert out[0].has_alumni is True
 
 
 # --- pure core: merge_orgs -----------------------------------------------------
@@ -131,7 +170,16 @@ def test_coverage_feedback_fails_on_missing_lens_and_targets_only_it():
 genai_mod = pytest.importorskip("google.genai")
 
 from advocate.agents.sourcing import source_organizations  # noqa: E402
+from advocate.core.models import Contact  # noqa: E402
 from types import SimpleNamespace as NS  # noqa: E402
+
+
+def _alum_contact(company, domain="", is_alum=True):
+    return Contact(
+        company=company, domain=domain, name="Maya", title="Director of Product",
+        function="Product", seniority="Director", grad_year=2020, location="NYC",
+        email="maya@example.com", linkedin_handle="in/maya", is_alum=is_alum,
+    )
 
 
 def _chunk(uri, title, domain):
@@ -203,7 +251,7 @@ def test_happy_path_returns_grounded_orgs_meeting_minimum(monkeypatch):
     assert len(result["organizations"]) == 40
     # downstream contract: rank_companies dict shape, no lens / motivation leaked
     assert set(result["organizations"][0]) == {
-        "company", "domain", "sector", "location", "has_alumni"
+        "company", "domain", "sector", "location", "has_alumni", "posting_score"
     }
 
 
@@ -309,3 +357,56 @@ def test_return_contract_keys_are_exactly_stable(monkeypatch):
     _install(monkeypatch, router)
     result = source_organizations("X", "Y", "Z")
     assert set(result) == {"organizations", "count", "grounded", "met_minimum"}
+
+
+def test_has_alumni_resolved_from_contacts_csv(monkeypatch):
+    """S-5: a sourced org matching an alum in the contacts CSV gets has_alumni=True;
+    non-matching orgs stay False. Also confirms posting_score flows through."""
+
+    def router(model, contents, config):
+        return _resp(_orgs_json(40), metadatas=[_meta()])
+
+    _install(monkeypatch, router)
+    # Co0 is an alum company; nothing else matches.
+    monkeypatch.setattr("advocate.agents.sourcing.load_contacts", lambda path: [_alum_contact("Co0")])
+    result = source_organizations("Fintech", "NYC", "PM")
+
+    by_company = {o["company"]: o for o in result["organizations"]}
+    assert by_company["Co0"]["has_alumni"] is True
+    assert by_company["Co1"]["has_alumni"] is False
+    # _orgs_json cycles lenses; Co2 lands on active_postings → posting_score = 2.
+    assert by_company["Co2"]["posting_score"] == POSTING_SCORE_ACTIVE
+    assert by_company["Co0"]["posting_score"] == 0  # Co0 lands on dream_peers
+
+
+def test_non_alum_contacts_do_not_set_flag(monkeypatch):
+    """A contact who is NOT an alum must not flip has_alumni (S-5: alumni only)."""
+
+    def router(model, contents, config):
+        return _resp(_orgs_json(40), metadatas=[_meta()])
+
+    _install(monkeypatch, router)
+    monkeypatch.setattr(
+        "advocate.agents.sourcing.load_contacts", lambda path: [_alum_contact("Co0", is_alum=False)]
+    )
+    result = source_organizations("Fintech", "NYC", "PM")
+    assert all(o["has_alumni"] is False for o in result["organizations"])
+
+
+def test_alumni_resolution_skipped_gracefully_on_contacts_load_failure(monkeypatch):
+    """A missing/broken contacts CSV must NOT nuke a good grounded list — degrade to
+    has_alumni=False and still ship the grounded orgs."""
+
+    def router(model, contents, config):
+        return _resp(_orgs_json(40), metadatas=[_meta()])
+
+    _install(monkeypatch, router)
+
+    def _boom(path):
+        raise FileNotFoundError(path)
+
+    monkeypatch.setattr("advocate.agents.sourcing.load_contacts", _boom)
+    result = source_organizations("Fintech", "NYC", "PM")
+    assert result["grounded"] is True
+    assert result["count"] == 40
+    assert all(o["has_alumni"] is False for o in result["organizations"])

@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-06-07 — LAMP ranking signals (Posting + Alumni) now real for grounded sourcing
+
+Grounded-sourced orgs previously all carried `posting_score=0` / `has_alumni=False`, so the
+lexicographic M→P→A ranker (`core/ranker.py`) collapsed to **Motivation-only** for the grounded
+path — P and A did nothing. Both signals are now populated from data we already have, with **no
+fabricated values** (PRD S-2(d), S-5, R-1):
+
+- **Posting (P): lens-derived.** An org surfaced via the `active_postings` lens (PRD S-2(d):
+  "companies with active relevant postings / growth signals") → `posting_score =
+  POSTING_SCORE_ACTIVE` (=2, on the 1–3 scale); every other lens → 0 (no hiring evidence → no
+  signal). Pure-code mapping in `SourcedOrg.to_rank_dict` over the lens tag we already collect —
+  no model-emitted number.
+- **Alumni (A): contacts-CSV match.** Each sourced org is matched (normalized company name OR
+  domain) against the user's contacts CSV (`is_alum=True`) — `core/sourcing.py:resolve_alumni`,
+  fed by `data/loaders.py:load_contacts`. PRD S-5 (user data only); no match → 0 (Edge Case 2);
+  a missing/broken CSV degrades to `has_alumni=False` without discarding the grounded list.
+- **`orchestrator.py`:** step 4 now tells the model to pass each org to `rank_companies`
+  UNCHANGED (preserve `posting_score`/`has_alumni`, only add `motivation`) — guards the
+  free-form-reserialization hazard that would otherwise silently drop the new signals.
+
+**Verified live (Vertex):** `source_organizations("Fintech","New York City","Product Management")`
+→ 45 orgs, 9 `active_postings` orgs at `posting_score=2`, and (with a contacts CSV containing a real
+match) `has_alumni=True` surfaced correctly. Tests +9. **209 passed, 1 skipped.**
+
 ## 2026-06-07 — Fix: grounded sourcing returned 0 orgs in prod (grounding-signal mismatch)
 
 The live deploy check (revision `advocate-00017-9ml`) showed `source_organizations` returning

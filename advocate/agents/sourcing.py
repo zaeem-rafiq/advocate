@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from typing import Tuple
 
 from advocate.agents.config import (
+    CONTACTS_CSV,
     LOCATION,
     MIN_SOURCED_ORGS,
     PROJECT,
@@ -41,7 +42,9 @@ from advocate.core.sourcing import (
     coverage_feedback,
     merge_orgs,
     parse_orgs,
+    resolve_alumni,
 )
+from advocate.data.loaders import load_contacts
 
 _LOG = logging.getLogger("advocate.sourcing")
 
@@ -123,6 +126,28 @@ LinkedIn or Indeed. Respond with ONLY a raw JSON array of NEW organizations, eac
 def _fallback() -> dict:
     """Honest empty result so the orchestrator falls back to `load_seed_companies`."""
     return {"organizations": [], "count": 0, "grounded": False, "met_minimum": False}
+
+
+def _resolve_alumni(orgs: tuple[SourcedOrg, ...]) -> tuple[SourcedOrg, ...]:
+    """Back-fill `has_alumni` by matching sourced orgs against the user's contacts CSV.
+
+    PRD S-5: alumni matching uses ONLY user-provided data. Failure to load the CSV must
+    NOT discard a good grounded list — log and return the orgs unchanged (has_alumni
+    stays False, which the ranker treats as a 0 affiliation signal per Edge Case 2).
+    """
+    try:
+        contacts = load_contacts(CONTACTS_CSV)
+    except Exception:  # noqa: BLE001 — a missing/broken CSV degrades to "no alumni", never a crash
+        _LOG.warning("alumni resolution skipped: could not load contacts CSV %r", CONTACTS_CSV)
+        return orgs
+    alum_keys = set()
+    for c in contacts:
+        if not c.is_alum:
+            continue
+        alum_keys.add(c.company.strip().casefold())
+        if c.domain.strip():
+            alum_keys.add(c.domain.strip().casefold())
+    return resolve_alumni(orgs, alum_keys)
 
 
 def source_organizations(industry: str, geography: str, function: str) -> dict:
@@ -209,7 +234,9 @@ def source_organizations(industry: str, geography: str, function: str) -> dict:
         result = research_until_sufficient(
             lambda: first, evaluate, refine, max_iterations=SOURCING_MAX_ITERATIONS
         )
-        orgs = result.findings.orgs
+        # Back-fill the alumni signal from the user's contacts CSV before ranking; the
+        # posting signal is derived per-org from the lens inside to_rank_dict().
+        orgs = _resolve_alumni(result.findings.orgs)
         met_minimum = len(orgs) >= MIN_SOURCED_ORGS
         if not met_minimum:
             # Real, grounded orgs still ship (better than swapping to demo seeds); the
