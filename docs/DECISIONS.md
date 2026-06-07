@@ -5,6 +5,17 @@ Format: date · decision · rationale · reversible?
 
 ---
 
+## 2026-06-07 — Prod deploy advocate-00024-tzg (eval harness + naming)
+
+`gcloud run deploy advocate --source .` after the offline Vertex Gen AI eval harness +
+platform-naming reconciliation. New revision **advocate-00024-tzg** serves 100% traffic; SA
+`advocate-run@…`, the three env vars, and `--no-allow-unauthenticated` all preserved. Smoke:
+authenticated `GET /list-apps → 200 ["advocate_app"]`, anonymous → 403. Runtime is unchanged —
+`advocate/eval/*` ships in the image but is inert (the `[eval]` extra is not installed; nothing
+on the request path imports it). Reversible: yes (roll traffic back to a prior revision).
+
+---
+
 ## 2026-06-06
 
 - **Python 3.12 via `uv`** for the project venv. Rationale: local system Python is 3.9.6;
