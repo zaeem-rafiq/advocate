@@ -295,3 +295,13 @@ Format: date · decision · rationale · reversible?
   already-tested critic grade (not a new LLM-output parser), so the deterministic unit test owns it;
   forcing grade=fail on a live model is nondeterministic. Tests: depth assertions across the prep
   suite. **220 passed, 1 skipped** (on this branch's pre-Task-1 baseline). Reversible: yes.
+
+- **Prod redeployed with both follow-ons (PRD S-3 multi-lens + TIARA depth).** Merged
+  `slice/s3-multi-lens` (ff) and `slice/tiara-depth` into `main` (`cbced80`; CHANGELOG/DECISIONS
+  conflicts resolved keep-both, orchestrator.py auto-merged), pushed to
+  `github.com/zaeem-rafiq/advocate`, then `gcloud run deploy advocate --source .` from merged main.
+  New revision **advocate-00021-5xp** (image `sha256:e0eedc57…`) serves 100% of traffic, replacing
+  `advocate-00020-wmv`. SA `advocate-run@…`, the three env vars, and authenticated-only ingress all
+  preserved (verified: no `allUsers` binding). Combined suite on merged main **233 passed, 1 skipped**;
+  functional smoke `authenticated GET /list-apps → 200 ["advocate_app"]`. Reversible: yes (re-deploy
+  a prior revision / `gcloud run services update-traffic`).
