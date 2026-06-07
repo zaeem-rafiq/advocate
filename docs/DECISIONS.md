@@ -209,3 +209,10 @@ Format: date · decision · rationale · reversible?
   path never emitted `posting_score` (the ranker defaults it to 0); deriving it would change ranking
   behavior and risks fabricating a signal. Left for a separate decision once eval data warrants it;
   canonical `core/models.py:Org` untouched. Reversible: yes.
+- **Grounding signal = "did it search?", not "are citations collectable" (live-check fix).** The first
+  deploy (`advocate-00017-9ml`) returned 0 orgs on every call: a structured JSON reply emits
+  `web_search_queries` but ZERO grounding chunks, so the prep-style `collect_sources` guard saw "no
+  sources" and discarded a grounded 41-org list. Fixed with `core/citations.py:grounding_used`
+  (web_search_queries OR chunks); sourcing no longer collects/renders citations it never used. prep is
+  unchanged (its cited-prose output still relies on chunks). Verified live: 42 orgs, grounded=True.
+  Reversible: yes.

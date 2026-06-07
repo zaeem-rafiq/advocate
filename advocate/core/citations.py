@@ -136,6 +136,26 @@ def collect_sources(
     return frozen, url_to_short_id_out
 
 
+def grounding_used(metadatas: Iterable[object]) -> bool:
+    """True if any grounding metadata shows the model actually ran a web search.
+
+    For a PROSE reply, grounding attaches `grounding_chunks` / `grounding_supports`
+    tied to text spans, and `collect_sources` turns those into citeable `src-N` sources.
+    A STRUCTURED (JSON) reply has no text spans, so the provider emits zero chunks even
+    though it searched — the proof of grounding is then `web_search_queries` (and a
+    `search_entry_point`). This signal covers BOTH shapes, so a caller that does not
+    render inline citations (e.g. sourcing, which returns a JSON org list) can tell a
+    grounded reply from a fabricated one — where `collect_sources` alone would wrongly
+    report "ungrounded". A thin reply with neither searches nor chunks returns False.
+    """
+    for metadata in metadatas:
+        if getattr(metadata, "web_search_queries", None):
+            return True
+        if getattr(metadata, "grounding_chunks", None):
+            return True
+    return False
+
+
 def replace_citations(
     report: str,
     sources: Mapping[str, Source],

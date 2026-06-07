@@ -11,6 +11,7 @@ from advocate.core.citations import (
     LOW_CONFIDENCE_THRESHOLD,
     Source,
     collect_sources,
+    grounding_used,
     replace_citations,
 )
 
@@ -195,3 +196,25 @@ def test_replace_can_disable_confidence_annotation():
     out = replace_citations("x<cite source=\"src-1\"/>.", sources, show_confidence=False)
     assert "(low confidence)" not in out
     assert "[Weak](https://w.com)" in out
+
+
+# --- grounding_used: "did the model search?" (covers the structured-JSON case) ----
+
+
+def test_grounding_used_true_when_web_search_queries_present():
+    """A structured JSON reply grounds via web_search_queries with ZERO chunks."""
+    meta = NS(web_search_queries=["top fintechs in NYC"], grounding_chunks=[], grounding_supports=[])
+    assert grounding_used([meta]) is True
+
+
+def test_grounding_used_true_when_chunks_present():
+    """A prose reply grounds via grounding_chunks (no web_search_queries attribute)."""
+    assert grounding_used([_meta([_chunk("https://a.com", "A", "a.com")])]) is True
+
+
+def test_grounding_used_false_when_neither_searches_nor_chunks():
+    assert grounding_used([_meta([], [])]) is False
+
+
+def test_grounding_used_false_on_empty_iterable():
+    assert grounding_used([]) is False

@@ -3,9 +3,9 @@
 Upgrades sourcing from a single-pass ADK sub-agent (which merely *asked* for >=40 orgs
 and hoped) into a **research → critique-for-gaps → refine** loop that enforces the
 FR-1 minimum, reusing the Deep Search scaffolding shipped for TIARA prep:
-`research_until_sufficient` (`core/research.py`) drives the loop, `collect_sources`
-(`core/citations.py`) scores the grounding, and the pure-code helpers in
-`core/sourcing.py` parse/dedupe the orgs and gate coverage.
+`research_until_sufficient` (`core/research.py`) drives the loop, `grounding_used`
+(`core/citations.py`) confirms the model actually searched, and the pure-code helpers
+in `core/sourcing.py` parse/dedupe the orgs and gate coverage.
 
 Per Advocate's house rule "the LLM proposes, pure code enforces", the loop control and
 the coverage gate are pure code; only the grounded research/refine calls are LLM. The
@@ -22,8 +22,8 @@ tests/test_tool_error_handling.py).
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import Dict, Tuple
+from dataclasses import dataclass
+from typing import Tuple
 
 from advocate.agents.config import (
     LOCATION,
@@ -33,7 +33,7 @@ from advocate.agents.config import (
     SOURCING_MODEL,
     USE_VERTEX,
 )
-from advocate.core.citations import collect_sources
+from advocate.core.citations import grounding_used
 from advocate.core.research import Feedback, research_until_sufficient
 from advocate.core.sourcing import (
     LAMP_LENSES,
@@ -48,15 +48,14 @@ _LOG = logging.getLogger("advocate.sourcing")
 
 @dataclass(frozen=True)
 class _SourcingFindings:
-    """Loop findings for sourcing: the orgs gathered so far + the grounding sources.
+    """Loop findings for sourcing: the orgs gathered so far + whether they were grounded.
 
     Threads through `research_until_sufficient` unchanged (the loop treats findings
-    opaquely); a refine pass merges new orgs and sources into it.
+    opaquely); a refine pass merges new orgs and keeps `grounded` sticky-true.
     """
 
     orgs: Tuple[SourcedOrg, ...] = ()
-    sources: Dict[str, object] = field(default_factory=dict)
-    url_to_short_id: Dict[str, str] = field(default_factory=dict)
+    grounded: bool = False
 
 
 def _org_schema_line() -> str:
@@ -173,10 +172,7 @@ def source_organizations(industry: str, geography: str, function: str) -> dict:
             text, metadatas = _grounded(
                 _research_prompt(industry, geography, function, MIN_SOURCED_ORGS)
             )
-            sources, url_to_short_id = collect_sources(metadatas)
-            return _SourcingFindings(
-                orgs=parse_orgs(text), sources=sources, url_to_short_id=url_to_short_id
-            )
+            return _SourcingFindings(orgs=parse_orgs(text), grounded=grounding_used(metadatas))
 
         def evaluate(findings: _SourcingFindings) -> Feedback:
             return coverage_feedback(
@@ -190,16 +186,24 @@ def source_organizations(industry: str, geography: str, function: str) -> dict:
                     industry, geography, function, feedback.follow_up_queries, existing_names
                 )
             )
-            merged = merge_orgs(findings.orgs, parse_orgs(text))
-            sources, url_to_short_id = collect_sources(
-                metadatas, sources=findings.sources, url_to_short_id=findings.url_to_short_id
+            return _SourcingFindings(
+                orgs=merge_orgs(findings.orgs, parse_orgs(text)),
+                grounded=findings.grounded or grounding_used(metadatas),
             )
-            return _SourcingFindings(orgs=merged, sources=sources, url_to_short_id=url_to_short_id)
 
-        # First pass once, up front: an ungrounded or unparseable result short-circuits
-        # to the honest fallback before spending refine calls (mirrors prepare_informational).
+        # First pass once, up front: an unparseable or ungrounded result short-circuits to
+        # the honest fallback before spending refine calls (mirrors prepare_informational).
+        # "grounded" means the model actually ran web searches (grounding metadata present),
+        # NOT that inline citations were collectable: a structured JSON org list has no text
+        # spans to cite, so it yields web_search_queries but ZERO grounding chunks. Gating on
+        # collected citations (prep's prose signal) wrongly discarded a fully grounded list.
+        # (Found in the live deploy check — see DECISIONS/CHANGELOG.)
         first = research()
-        if not first.orgs or not first.sources:
+        if not first.orgs or not first.grounded:
+            _LOG.warning(
+                "sourcing fell back for industry=%r geography=%r function=%r: parsed_orgs=%d grounded=%s",
+                industry, geography, function, len(first.orgs), first.grounded,
+            )
             return _fallback()
 
         result = research_until_sufficient(
@@ -217,7 +221,7 @@ def source_organizations(industry: str, geography: str, function: str) -> dict:
         return {
             "organizations": [o.to_rank_dict() for o in orgs],
             "count": len(orgs),
-            "grounded": True,
+            "grounded": result.findings.grounded,
             "met_minimum": met_minimum,
         }
     except Exception:  # noqa: BLE001 — own the error: honest grounded=False, never a crash
