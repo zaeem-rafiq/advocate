@@ -29,3 +29,7 @@ MIN_SOURCED_ORGS = 40
 # Deep Search sample defaults to 5) because Advocate runs under a $50 budget alert and a
 # TIARA brief is small. Env-overridable for tuning without a code change.
 RESEARCH_MAX_ITERATIONS = int(os.environ.get("ADVOCATE_RESEARCH_MAX_ITERATIONS", "2"))
+
+# Max critique-and-refine passes in the Sourcing loop (gap-filling toward the >=40-org
+# target). Same $50-budget rationale and default as the prep loop; tuned independently.
+SOURCING_MAX_ITERATIONS = int(os.environ.get("ADVOCATE_SOURCING_MAX_ITERATIONS", "2"))

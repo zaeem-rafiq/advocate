@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-06-07 — Iterative, count-enforced Sourcing (Deep Search loop reuse)
+
+`source_organizations` replaces the single-pass Sourcing **sub-agent** (which merely asked for
+≥40 orgs and hoped). It reuses the shipped Deep Search scaffolding — `research_until_sufficient`
+(`core/research.py`) and `collect_sources` (`core/citations.py`) — to run a grounded
+**research → coverage-gate → refine** loop that enforces the FR-1 minimum (≥40 distinct orgs
+across all four LAMP lenses) in pure code, and returns a **structured** org list ready for
+`rank_companies` (no more free-text the orchestrator must re-parse).
+
+- `advocate/core/sourcing.py` (new, pure code) — `SourcedOrg` (+ `to_rank_dict`), tolerant
+  `parse_orgs` (JSON fences / surrounding prose / object-wrapper; clears fabricated lenses),
+  case-insensitive `merge_orgs`, and `coverage_feedback` — the deterministic critic (count +
+  LAMP-lens coverage) that templates follow-up queries for the gaps. Because `evaluate` is pure
+  code here, the loop spends **no** LLM critic call (unlike the TIARA prep loop).
+- `advocate/agents/sourcing.py` — `source_organizations(industry, geography, function)` wires the
+  grounded research/refine Gemini Pro calls (Google Search grounding inside the genai call) into
+  the loop; owns its errors with an honest `grounded=False` fallback (NOT `@tool_safe`), and ships
+  real-but-thin results with a `met_minimum=False` flag rather than swapping to demo seeds.
+- `advocate/agents/orchestrator.py` — sourcing is now a `FunctionTool` (no `AgentTool` wrapper);
+  instruction updated to pass `organizations` straight to `rank_companies` and fall back to
+  `load_seed_companies` only on `grounded=false` / empty.
+- `advocate/agents/config.py` — `SOURCING_MAX_ITERATIONS` (default 2, env-overridable).
+- Tests: `tests/test_sourcing.py` (+20: pure-core parse/merge/gate + fake-client loop wiring),
+  `test_tool_error_handling.py` pins the no-`@tool_safe` stance. **195 passed, 1 skipped** (was 175).
+
 ## 2026-06-07 — Fix: TIARA compose-output parsing (found in live deploy check)
 
 A live grounded run against a real company (post-deploy of the pipeline above) exposed two
