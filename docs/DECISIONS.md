@@ -237,3 +237,26 @@ Format: date · decision · rationale · reversible?
   Session state is in-memory/per-conversation (the candidate list is transient); the durable top-5
   still persists via save_pipeline/Firestore. Reversible: yes. Deferred: cross-session candidate
   persistence (intentionally transient).
+
+## 2026-06-07 — TIARA prep: additive `depth` signal (the deferred caveat, now done)
+
+- **`depth` is ADDITIVE — it does NOT overload `grounded`.** The 2026-06-07 TIARA decision
+  deferred a user-facing depth caveat until eval/demo-QA showed the per-claim `(low confidence)`
+  flags were insufficient; this implements it as a separate field rather than flipping `grounded`
+  (which means "backed by real cited sources" — flipping it would discard a real, cited,
+  company-specific brief for generic boilerplate and falsely imply retrieval failed).
+- **Representation: a STRING `"deep"`/`"shallow"`** (chosen over a boolean). A field named `depth`
+  reads naturally as deep/shallow, is self-documenting in JSON/logs, and is extensible to a third
+  level later. `"shallow"` iff the critic's terminal grade is `"fail"` (the loop spent its budget
+  without converging) OR on any `_fallback` path (no/thin research — the thinnest case); `"deep"`
+  otherwise (incl. `feedback is None`, matching the existing grade-fail guard). Set in pure code at
+  the existing grade=fail branch in `prepare_informational`; `_fallback` carries it too for
+  contract stability. Reversible: yes.
+- **Orchestrator surfaces it** as a one-line "based on limited sources — verify specifics" caveat
+  when `depth == "shallow"`, even when `grounded` is true. The existing `grounded=false` handling
+  is unchanged (both signals coexist; on the fallback both fire, which is consistent).
+- **Verified live (Vertex):** `prepare_informational("Stripe","Product Manager")` → `grounded=True`,
+  `depth="deep"`, cited brief + 5 TIARA categories. The `"shallow"` path is derived from the
+  already-tested critic grade (not a new LLM-output parser), so the deterministic unit test owns it;
+  forcing grade=fail on a live model is nondeterministic. Tests: depth assertions across the prep
+  suite. **220 passed, 1 skipped** (on this branch's pre-Task-1 baseline). Reversible: yes.

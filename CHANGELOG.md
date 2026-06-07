@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-06-07 — TIARA prep: additive `depth` signal + "research was thin" caveat
+
+When the TIARA research loop (`prepare_informational`) never reached critic `grade="pass"` within
+the budget, the brief still shipped `grounded=True` and only logged a warning — the user got **no
+signal the research was thin**. A user-facing `depth` signal was deferred (DECISIONS, 2026-06-07)
+with the constraint: **do not overload `grounded`** ("backed by real cited sources", *not* "deep
+enough"). Now added, additively:
+
+- **`agents/prep_tools.py`:** `prepare_informational` returns a new `depth` field — `"shallow"`
+  when the critic's terminal grade is `"fail"` (loop didn't converge) or on any `_fallback` path,
+  `"deep"` otherwise. `grounded` semantics unchanged. `_fallback` carries `depth: "shallow"` too
+  (contract stability). Return contract: `{company, brief, questions, grounded, depth}`.
+- **`agents/orchestrator.py`:** the informational-prep instruction now adds a brief one-line "based
+  on limited sources — verify specifics" caveat when `depth == "shallow"`, even when `grounded` is
+  true; presents normally when `"deep"`.
+- No change to `research.py`/`citations.py`/`core/models.py`/ranker — purely additive.
+
+**Verified live (Vertex, Gemini 2.5 Pro):** `prepare_informational("Stripe","Product Manager")` →
+`grounded=True`, `depth="deep"`, grounded cited brief + 5 TIARA categories (the `"shallow"` branch
+is deterministically covered by the unit test since it's derived from the already-tested critic
+grade, not a new parser). Tests: `depth` assertions added across the prep suite. **220 passed, 1 skipped.**
+
 ## 2026-06-07 — Harden motivation→rank merge: authoritative ranking signals in session state
 
 The orchestrator LLM re-serializes the sourced org list to fold in the user's motivation scores,

@@ -81,6 +81,9 @@ Informational prep:
   company and target role. Present the grounded research brief and all five TIARA questions
   (Trends, Insights, Advice, Resources, Assignments). If grounded is false, tell the user the
   research was thin and the questions are general — never present invented company facts.
+  If `depth` is "shallow" (even when grounded is true), add a brief one-line caveat that the
+  research was based on limited sources and the user should verify specifics before relying on
+  them. If `depth` is "deep", present normally.
 
 After the informational:
 - Call `schedule_post_interview_followups` with the company, contact, the date of the
