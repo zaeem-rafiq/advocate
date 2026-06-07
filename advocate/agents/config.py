@@ -24,3 +24,8 @@ CONTACTS_CSV = os.environ.get("ADVOCATE_CONTACTS_CSV", "demo_alumni_contacts.csv
 
 # Minimum distinct orgs the Sourcing agent must produce (FR-1).
 MIN_SOURCED_ORGS = 40
+
+# Max critique-and-refine passes in the TIARA prep research loop. Bounded tightly (the
+# Deep Search sample defaults to 5) because Advocate runs under a $50 budget alert and a
+# TIARA brief is small. Env-overridable for tuning without a code change.
+RESEARCH_MAX_ITERATIONS = int(os.environ.get("ADVOCATE_RESEARCH_MAX_ITERATIONS", "2"))

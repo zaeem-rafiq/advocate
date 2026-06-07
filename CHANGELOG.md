@@ -1,5 +1,45 @@
 # Changelog
 
+## 2026-06-07 — Iterative cited TIARA research pipeline
+
+`prepare_informational` is upgraded from a single grounded Gemini call into a
+**plan → research → critique-for-gaps → refine → CITED brief** pipeline, lifting the
+pattern from Google's Deep Search ADK sample (`google/adk-samples` →
+`python/agents/deep-search`, Apache-2.0): a `Feedback` critic, an escalate-on-pass loop, a
+follow-up "refine" pass, and confidence-scored grounding citations. Per Advocate's house
+rule "the LLM proposes, pure code enforces," the loop control, `src-N` source assignment,
+and `<cite>` → Markdown-link rendering are deterministic pure code; the four Gemini calls
+(research, critic, refine, compose) are injected callables — so the logic is unit-testable
+without an LLM, exactly like the slice-#2 reviser loop.
+
+- `advocate/core/research.py` (new) — `Feedback`, `ResearchFindings`, `ResearchResult`,
+  `research_until_sufficient(research, evaluate, refine, max_iterations=2)`. Bounded loop;
+  escalate on grade=="pass"; stop early when the critic has no follow-ups. 100% covered.
+- `advocate/core/citations.py` (new) — `Source`, `collect_sources` (assigns/dedupes `src-N`,
+  representative confidence = max over grounding supports, immutable merge across passes),
+  `replace_citations` (cite tags → `[title](url)`; weakly-grounded sources flagged
+  `(low confidence)`; tags to uncollected sources dropped). 100% covered.
+- `advocate/agents/prep_tools.py` — wires Gemini (Pro for grounded research/refine, Flash
+  for critic/compose) into the loop; brief carries inline citations. Keeps the exact return
+  contract `{"company","brief","questions","grounded"}`, the honest `grounded=False` fallback
+  for thin/ungrounded sources, and its no-`@tool_safe` stance. An honesty guard degrades to
+  the fallback rather than ever shipping an empty / evidence-stripped brief as grounded.
+- `advocate/agents/config.py` — `RESEARCH_MAX_ITERATIONS` (env-overridable, default 2) to
+  bound the loop tightly under the $50 budget alert (Deep Search defaults to 5).
+- `orchestrator.py` unchanged — the contract is stable.
+- Tests: `tests/test_research.py` (8), `tests/test_citations.py` (16),
+  `tests/test_prep_tools.py` (15, fake genai client). 174 passed, 1 skipped.
+
+Known limitations / follow-ups:
+- The grounded brief depends on Gemini emitting `<cite source="src-N"/>` tags against the
+  supplied source ids; tag fidelity is exercised via the fake client, not a live model —
+  belongs in an eval / demo-QA pass.
+- A final critic verdict of `grade=fail` (loop exhausted the budget) still ships the brief
+  as grounded (the facts are real, just shallow) and is logged for audit. Decision (2026-06-07):
+  keep it grounded — `grounded` means "backed by real sources," not "deep enough," and flipping
+  would discard real cited research for boilerplate. A user-facing depth caveat (additive, not
+  overloading `grounded`) is deferred until eval data warrants it.
+
 ## 2026-06-07 — Cross-cutting tool error boundary (`tool_safe`)
 
 External/LLM/IO faults in agent function tools no longer crash the agent turn. A new
