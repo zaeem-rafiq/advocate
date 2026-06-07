@@ -229,6 +229,52 @@ def test_guard_does_not_over_trigger_when_one_citation_is_valid(monkeypatch):
     assert "src-9" not in result["brief"]  # the bogus tag was dropped, not surfaced
 
 
+_COMPOSED_MODEL_NATIVE = (
+    "Here are the requested sections for your informational interview preparation:\n\n"
+    "**About Acme**\n\n"
+    'Acme builds reusable rockets<cite source="src-1"/> and recently raised a Series B<cite source="src-2"/>.\n\n'
+    "**TIARA Questions**\n\n"
+    'Trends: Given Acme\'s launch focus<cite source="src-1"/>, what trends matter most?\n'
+    'Insights: What surprised you<cite source="src-2"/> about the work?\n'
+    "Advice: Where should I focus first?\n"
+    "Resources: Who else should I meet?\n"
+    'Assignments: What project could I study<cite source="src-1"/>?\n'
+)
+
+
+def test_compose_with_model_native_formatting_splits_and_renders_cleanly(monkeypatch):
+    """Regression (found in the live deploy check): the compose model uses its own headers and
+    preamble (**About X** / **TIARA Questions**) and puts <cite> tags in the questions. The
+    brief must NOT duplicate the questions, and NO raw <cite> tag may survive in the brief or
+    in any question — citations render to links everywhere."""
+
+    def router(model, contents, config):
+        if _is_grounded(config):
+            return _resp(
+                "Acme builds reusable rockets; raised a Series B.",
+                metadatas=[_meta("https://a.com", "A", "a.com"), _meta("https://b.com", "B", "b.com")],
+            )
+        if _is_json(config):
+            return _resp('{"grade": "pass", "comment": "ok", "follow_up_queries": []}')
+        return _resp(_COMPOSED_MODEL_NATIVE)
+
+    _install(monkeypatch, router)
+    result = prepare_informational("Acme", "Engineer")
+
+    assert result["grounded"] is True
+    # The brief is the company prose, not the questions duplicated into it.
+    assert "Trends:" not in result["brief"]
+    assert "TIARA Questions" not in result["brief"]
+    # No raw citation tags survive anywhere; they render to Markdown links.
+    assert "<cite" not in result["brief"]
+    assert "](" in result["brief"]
+    for category, q in result["questions"].items():
+        assert "<cite" not in q, f"raw cite tag leaked into {category}"
+    assert set(result["questions"]) == set(TIARA_CATEGORIES)
+    # A citation that appeared inside a question is rendered there too.
+    assert "[A](https://a.com)" in result["questions"]["Trends"]
+
+
 def test_grounded_true_even_when_critic_never_passes(monkeypatch, caplog):
     """H2 (decision lock): a brief grounded in real sources ships grounded=True even if the
     critic keeps failing within the budget; the un-passed verdict is logged, not silently dropped."""
