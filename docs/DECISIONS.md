@@ -97,3 +97,56 @@ Format: date · decision · rationale · reversible?
   2. **Demo video** — manual recording; script is in docs/DEMO_SCRIPT.md.
   3. **Public (unauthenticated) Cloud Run access for judges** — currently authenticated-only;
      making it public was deferred (classifier-gated) and is a separate explicit decision.
+
+- **PRD consolidation → canonical `docs/prd-advocate.md` v1.0.** Merged the v0.1 product draft into
+  the contest PRD (one source of truth). Locked decisions (PRD §14): D-1 one canonical doc;
+  D-2 lexicographic M→P→A ranking (additive sum rejected; matches as-built ranker); D-3 consented
+  Gmail send + Calendar-API writes with observed/attested tagging; D-4 OAuth-decline degraded mode +
+  observed-cohort KPI; D-5 per-cohort flat pricing (figure founder-owned, TBD); D-6 ≥10-rated
+  motivation gate; D-7 all 6 screens v1, demo golden path per DEMO_SCRIPT.
+  - **IRREVERSIBLE-ADJACENT / not yet built:** D-3 reverses the slice-#9 structural no-send guardrail
+    (the test asserts no send path exists) and the demo's "nothing is ever sent" trust beat. The PRD
+    records consented send as the **target**, with draft-only as the shipped/fallback behavior. Whether
+    the reversal lands **before** final submission or as a **post-submission v1.1** is an OPEN question
+    (PRD §15) — will not touch the shipped no-send guardrail without explicit approval.
+  - The v0.1 source (`prd-advocate-v0.1.md`) lives only in the `objective-merkle-f6da72` worktree; left
+    in place (different branch) — not deleted from here. Reversible: yes (PRD is git-tracked).
+
+- **PRD follow-ons (same session).**
+  1. **D-3 consented send RESOLVED → post-submission v1.1.** Shipped build stays draft-only; the
+     slice-#9 no-send guardrail + test are untouched. Logged as issues #10 (Gmail send) / #11
+     (Calendar writes).
+  2. **Canonical PRD corrected to the frozen build** where it had imported the v0.1 draft's finer
+     specs: responder thresholds back to as-built **Booster ≤3 / Obligate >3 / Curmudgeon =
+     silence-past-day-7** (RC-2); ranker final tiebreak documented as **stable input order**, not
+     alphabetical (R-2 / §7). Both v0.1 variants marked deferred v1.1.
+  3. **Code (additive, pure-core, no existing file touched):** added `advocate/core/gate.py` (the
+     ≥10-rated outreach gate, D-6) + `tests/test_gate.py` (8) and `tests/test_ranking_spec.py` (4,
+     pins the §7 worked-example fixture so the ranker can't regress to an additive sum). **109
+     pure-core tests pass** (`uv run --no-project --python 3.12 --with pytest`). Gate wiring into
+     drafting/UI is issue #12; the 6-screen web UI is issue #13. Reversible: yes.
+
+- **Migrated to Google ADK 2.x (`google-adk` 2.2.0).** Pinned `>=2.2.0,<3.0.0` (was the
+  unbounded `>=0.3.0`) and bumped `requires-python` to `>=3.11` — ADK 2.0 requires 3.11+
+  (updates the earlier "Python 3.12" note; venvs resolve 3.11+: 3.12 in the main checkout,
+  3.13 in the worktree). No application code changed: the `LlmAgent` / tools / `get_fast_api_app`
+  surface is stable across 1.x→2.x. Verified on the **merged** tree (incl. the new gate +
+  ranking-spec tests): **114 passed / 1 skipped**, app serves (`/list-apps` → `advocate_app`,
+  49 routes). The 2.0 "don't share persistent storage with 1.x" warning does NOT apply here —
+  ADK sessions are in-memory (no `session_service_uri`) and Firestore holds only app-domain state
+  behind `PipelineRepository`, which ADK never touches. Reversible: yes (re-pin to `<2.0.0`).
+- **Prod redeployed on ADK 2.x.** `gcloud run deploy advocate --source . --project agenticprd
+  --region us-central1 --service-account advocate-run@… --no-allow-unauthenticated --set-env-vars
+  GOOGLE_GENAI_USE_VERTEXAI=TRUE,GOOGLE_CLOUD_PROJECT=agenticprd,GOOGLE_CLOUD_LOCATION=us-central1`.
+  New revision **advocate-00013-vp6** (image `sha256:aa994894…`) serves 100% traffic; SA, the three
+  env vars, and authenticated-only ingress all preserved (verified: no `allUsers` binding). Functional
+  smoke passed: authenticated `GET /list-apps → 200 ["advocate_app"]`. Added a `.gcloudignore`
+  (`#!include:.gitignore` + `.claude/ .git/ docs/ tests/ …`) so `--source` no longer uploads the 123M
+  `.claude/` worktree tree / venvs to Cloud Build.
+- **OPEN — Cloud Trace export failing (`PERMISSION_DENIED`), non-fatal.** Logs show
+  `Permission 'cloudtrace.traces.patch' denied on resource '//logging.googleapis.com/projects/agenticprd'`
+  despite the Cloud Trace API being enabled AND `advocate-run` holding `roles/cloudtrace.agent`. So it
+  is NOT a permission dropped by the migration — IAM/API are correctly configured; the odd
+  `logging.googleapis.com` resource container points to an attribution/quota-project issue, and it most
+  likely predates the migration on the 1.x revision. App is unaffected (serves normally); only
+  `trace_to_cloud` observability is degraded. To investigate separately.
