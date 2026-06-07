@@ -21,7 +21,8 @@ from advocate.core.research import Feedback
 
 # Session-state key under which the candidate list's authoritative ranking signals are
 # stashed so the rank/persist steps can recover them even if the LLM drops the fields
-# while folding in the user's motivation scores (see signals_index / reconcile_signals).
+# while folding in the user's motivation scores (see candidate_records_index /
+# reconcile_signals / reconcile_records).
 CANDIDATE_SIGNALS_KEY = "candidate_signals"
 
 # Dalton's four LAMP lenses. The model tags each org with one OR MORE; coverage_feedback
@@ -277,14 +278,17 @@ def resolve_alumni(
     return tuple(out)
 
 
-def signals_index(companies: Iterable[Mapping]) -> Dict[str, dict]:
-    """Index a candidate list by casefolded company → its authoritative ranking signals.
+def candidate_records_index(companies: Iterable[Mapping]) -> Dict[str, dict]:
+    """Index a candidate list by casefolded company → its FULL authoritative record.
 
-    Keeps only `posting_score`/`has_alumni` (identity + motivation come from the user via
-    the LLM; domain/sector/location don't affect ranking). Blank company names are
-    skipped. Coerces with the same defaults the rank/persist tools use, so a round-tripped
-    value matches what those tools would have produced. Producers stash this in session
-    state for `reconcile_signals` to recover after motivation scoring.
+    Stores the ranking signals (`posting_score`/`has_alumni`) AND the presentation fields
+    (`domain`/`sector`/`location`/`lenses`/`rationale`) so the rank/persist tools can rebuild a
+    complete org dict from a MINIMAL ``{company, motivation}`` payload — keeping the heavy fields
+    out of the orchestrator LLM's function-call arguments, which overflow (MALFORMED_FUNCTION_CALL)
+    once ~40+ orgs are inlined. Identity + motivation are the user's via the LLM; everything else is
+    authoritative here. Blank company names are skipped; fields are coerced with the same defaults
+    the tools use, so a round-tripped value matches what those tools would have produced. Producers
+    stash this in session state for `reconcile_signals`/`reconcile_records` to recover.
     """
     index: Dict[str, dict] = {}
     for c in companies:
@@ -294,6 +298,11 @@ def signals_index(companies: Iterable[Mapping]) -> Dict[str, dict]:
         index[name] = {
             "posting_score": int(c.get("posting_score", 0) or 0),
             "has_alumni": bool(c.get("has_alumni", False)),
+            "domain": str(c.get("domain", "")),
+            "sector": str(c.get("sector", "")),
+            "location": str(c.get("location", "")),
+            "lenses": list(c.get("lenses", []) or []),
+            "rationale": str(c.get("rationale", "")),
         }
     return index
 
@@ -315,5 +324,35 @@ def reconcile_signals(
         if signals:
             merged["posting_score"] = signals["posting_score"]
             merged["has_alumni"] = signals["has_alumni"]
+        out.append(merged)
+    return out
+
+
+# Fields restored from the authoritative candidate record onto a minimal user-scored dict.
+# `company`/`motivation` (and any other caller key) come from the LLM input and are preserved.
+_RECORD_FIELDS = ("posting_score", "has_alumni", "domain", "sector", "location", "lenses", "rationale")
+
+
+def reconcile_records(
+    companies: Iterable[Mapping], authoritative: Mapping[str, Mapping]
+) -> List[dict]:
+    """Rebuild FULL candidate records from minimal `{company, motivation}` dicts + state.
+
+    For each input, when its casefolded company is in `authoritative`, override the record fields
+    (`posting_score`/`has_alumni` + the presentation fields `domain`/`sector`/`location`/`lenses`/
+    `rationale`) from there, taking `company`/`motivation` (and any other caller-supplied key) from
+    the input. When the company is NOT in state, the input passes through unchanged (empty state or
+    an unstashed path → identity, so existing callers and tests behave exactly as before). Only keys
+    actually present in the stored record are overridden, so a partial record never clobbers with a
+    missing value. Returns NEW dicts — inputs are never mutated.
+    """
+    out: List[dict] = []
+    for c in companies:
+        merged = dict(c)
+        record = authoritative.get(str(c.get("company", "")).strip().casefold())
+        if record:
+            for key in _RECORD_FIELDS:
+                if key in record:
+                    merged[key] = record[key]
         out.append(merged)
     return out

@@ -39,9 +39,10 @@ def _to_record(c: dict) -> OrgRecord:
 def save_pipeline(companies: List[dict], tool_context: ToolContext) -> dict:
     """Persist the user's working set of companies to durable pipeline state.
 
-    Call this after ranking, to save the active companies so the pipeline survives
-    across sessions. Each company dict needs: company, status (optional, default
-    'active'), motivation, posting_score, has_alumni.
+    Call this after ranking, to save the active companies so the pipeline survives across
+    sessions. Pass only {"company", "motivation"} (and optional "status", default 'active')
+    per org — posting_score/has_alumni are recovered automatically from the sourced list; do
+    not resend them or the other fields.
 
     Returns:
         {"saved": <count>} on success.

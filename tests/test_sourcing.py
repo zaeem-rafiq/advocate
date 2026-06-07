@@ -20,9 +20,10 @@ from advocate.core.sourcing import (
     coverage_feedback,
     merge_orgs,
     parse_orgs,
+    candidate_records_index,
+    reconcile_records,
     reconcile_signals,
     resolve_alumni,
-    signals_index,
 )
 
 # --- pure core: parse_orgs ------------------------------------------------------
@@ -162,24 +163,30 @@ def test_resolve_alumni_never_flips_true_to_false():
     assert out[0].has_alumni is True
 
 
-# --- pure core: signals_index + reconcile_signals (authoritative-state merge) ---
+# --- pure core: candidate_records_index + reconcile_signals/records (authoritative state) ---
 
 
-def test_signals_index_maps_casefold_company_to_signals():
-    idx = signals_index([
-        {"company": "Ramp", "posting_score": 2, "has_alumni": True},
-        {"company": "Alloy", "posting_score": 0, "has_alumni": False},
+def test_candidate_records_index_stores_full_record():
+    # The stash holds the FULL candidate record (ranking signals + presentation fields), so
+    # rank/persist can rebuild a complete org dict from a minimal {company, motivation} payload.
+    idx = candidate_records_index([
+        {"company": "Ramp", "posting_score": 2, "has_alumni": True, "domain": "ramp.com",
+         "sector": "Payments", "location": "NYC", "lenses": ["dream_peers"], "rationale": "Corp cards."},
     ])
     assert idx == {
-        "ramp": {"posting_score": 2, "has_alumni": True},
-        "alloy": {"posting_score": 0, "has_alumni": False},
+        "ramp": {"posting_score": 2, "has_alumni": True, "domain": "ramp.com",
+                 "sector": "Payments", "location": "NYC", "lenses": ["dream_peers"],
+                 "rationale": "Corp cards."},
     }
 
 
-def test_signals_index_skips_blank_company_and_coerces_defaults():
-    idx = signals_index([{"company": "  "}, {"company": "X"}])
+def test_candidate_records_index_skips_blank_and_coerces_defaults():
+    idx = candidate_records_index([{"company": "  "}, {"company": "X"}])
     assert set(idx) == {"x"}
-    assert idx["x"] == {"posting_score": 0, "has_alumni": False}  # missing → coerced
+    assert idx["x"] == {  # missing fields → coerced defaults
+        "posting_score": 0, "has_alumni": False, "domain": "", "sector": "",
+        "location": "", "lenses": [], "rationale": "",
+    }
 
 
 def test_reconcile_signals_overrides_from_authoritative_on_match():
@@ -203,6 +210,35 @@ def test_reconcile_signals_is_immutable():
     companies = [{"company": "Ramp", "posting_score": 0, "has_alumni": False}]
     reconcile_signals(companies, {"ramp": {"posting_score": 2, "has_alumni": True}})
     assert companies[0]["posting_score"] == 0  # input dict untouched
+
+
+def test_reconcile_records_rebuilds_full_dict_from_minimal_input():
+    # The LLM sends ONLY {company, motivation}; the full record is recovered from state so the
+    # heavy fields never need to ride in the rank_companies function call (the overflow fix).
+    companies = [{"company": "Ramp", "motivation": 5}]
+    authoritative = {"ramp": {"posting_score": 2, "has_alumni": True, "domain": "ramp.com",
+                              "sector": "Payments", "location": "NYC",
+                              "lenses": ["dream_peers", "active_postings"], "rationale": "Corp cards."}}
+    out = reconcile_records(companies, authoritative)
+    assert out[0]["motivation"] == 5  # caller-supplied fields preserved
+    assert out[0]["posting_score"] == 2 and out[0]["has_alumni"] is True
+    assert out[0]["domain"] == "ramp.com" and out[0]["sector"] == "Payments"
+    assert out[0]["lenses"] == ["dream_peers", "active_postings"]
+    assert out[0]["rationale"] == "Corp cards."
+
+
+def test_reconcile_records_passthrough_when_company_not_in_state():
+    companies = [{"company": "Seedco", "motivation": 4, "posting_score": 3}]
+    out = reconcile_records(companies, {})  # empty state → input unchanged (back-compat)
+    assert out[0] == {"company": "Seedco", "motivation": 4, "posting_score": 3}
+
+
+def test_reconcile_records_is_immutable():
+    companies = [{"company": "Ramp", "motivation": 5}]
+    reconcile_records(companies, {"ramp": {"posting_score": 2, "has_alumni": True,
+                                           "lenses": ["trends"], "rationale": "x",
+                                           "domain": "", "sector": "", "location": ""}})
+    assert companies[0] == {"company": "Ramp", "motivation": 5}  # input untouched
 
 
 # --- pure core: merge_orgs -----------------------------------------------------
@@ -306,7 +342,11 @@ def test_coverage_feedback_one_multilens_org_covers_all_its_lenses():
 
 genai_mod = pytest.importorskip("google.genai")
 
-from advocate.agents.session_state import recover_signals, stash_candidate_signals  # noqa: E402
+from advocate.agents.session_state import (  # noqa: E402
+    recover_records,
+    recover_signals,
+    stash_candidate_signals,
+)
 from advocate.agents.sourcing import source_organizations  # noqa: E402
 from advocate.agents.tools import rank_companies  # noqa: E402
 from advocate.core.models import Contact  # noqa: E402
@@ -577,13 +617,21 @@ def test_non_alum_contacts_do_not_set_flag(monkeypatch):
 
 
 def test_stash_and_recover_roundtrip_via_helpers():
-    """The agent helpers stash signals and recover them onto a re-serialized list."""
+    """The helpers stash the FULL candidate record and recover it onto a re-serialized list."""
     ctx = _FakeCtx()
-    stash_candidate_signals(ctx, [{"company": "Ramp", "posting_score": 2, "has_alumni": True}])
-    assert ctx.state[CANDIDATE_SIGNALS_KEY] == {"ramp": {"posting_score": 2, "has_alumni": True}}
-    # LLM re-emits the org with the signals dropped, only motivation added:
+    stash_candidate_signals(ctx, [{"company": "Ramp", "posting_score": 2, "has_alumni": True,
+                                   "domain": "ramp.com", "sector": "Payments", "location": "NYC",
+                                   "lenses": ["dream_peers"], "rationale": "Corp cards."}])
+    assert ctx.state[CANDIDATE_SIGNALS_KEY]["ramp"] == {
+        "posting_score": 2, "has_alumni": True, "domain": "ramp.com", "sector": "Payments",
+        "location": "NYC", "lenses": ["dream_peers"], "rationale": "Corp cards."}
+    # LLM re-emits only {company, motivation}; recover_signals restores the ranking subset:
     recovered = recover_signals(ctx, [{"company": "Ramp", "motivation": 5}])
     assert recovered[0]["posting_score"] == 2 and recovered[0]["has_alumni"] is True
+    # recover_records rebuilds the FULL dict (presentation fields too):
+    full = recover_records(ctx, [{"company": "Ramp", "motivation": 5}])
+    assert full[0]["lenses"] == ["dream_peers"] and full[0]["rationale"] == "Corp cards."
+    assert full[0]["domain"] == "ramp.com"
 
 
 def test_recover_signals_no_context_is_identity():
@@ -599,7 +647,10 @@ def test_source_organizations_stashes_signals_in_state(monkeypatch):
     ctx = _FakeCtx()
     source_organizations("Fintech", "NYC", "PM", ctx)
     idx = ctx.state[CANDIDATE_SIGNALS_KEY]
-    assert "co2" in idx and idx["co2"]["posting_score"] == POSTING_SCORE_ACTIVE  # active lens
+    # the stash now holds the FULL candidate record (signals + presentation fields)
+    assert idx["co2"]["posting_score"] == POSTING_SCORE_ACTIVE  # active_postings lens
+    assert "active_postings" in idx["co2"]["lenses"]
+    assert idx["co2"]["rationale"] and idx["co2"]["domain"]
     assert idx["co0"]["posting_score"] == 0
 
 
@@ -646,6 +697,30 @@ def test_source_then_rank_roundtrip_preserves_signals(monkeypatch):
     # Every active_postings org recovered posting_score=2 despite being dropped on the way in.
     assert any(o["posting_score"] == POSTING_SCORE_ACTIVE for o in ranked)
     assert {o["posting_score"] for o in ranked} == {0, POSTING_SCORE_ACTIVE}
+    # Presentation fields are recovered too, so the top-5 keeps badges without the LLM re-sending
+    # them — this is the MALFORMED_FUNCTION_CALL fix: the model passes only {company, motivation}.
+    assert all("lenses" in o and "rationale" in o for o in ranked)
+    assert all(o["rationale"] for o in ranked)  # every org's rationale recovered
+    assert any("active_postings" in o["lenses"] for o in ranked)
+
+
+def test_rank_companies_returns_recovered_lenses_and_rationale_from_minimal_payload():
+    """The fix: with the full-record stash, rank_companies REBUILDS badges/rationale from a
+    minimal {company, motivation} payload, so the orchestrator never re-serializes the fat list."""
+    ctx = _FakeCtx()
+    ctx.state[CANDIDATE_SIGNALS_KEY] = {
+        "ramp": {"posting_score": 0, "has_alumni": True, "domain": "ramp.com",
+                 "sector": "Payments", "location": "NYC",
+                 "lenses": ["dream_peers", "active_postings"], "rationale": "Corp cards & expense."},
+    }
+    out = rank_companies([{"company": "Ramp", "motivation": 5}], ctx)
+    o = out["ranked"][0]
+    assert o["lenses"] == ["dream_peers", "active_postings"]
+    assert o["rationale"] == "Corp cards & expense."
+    assert (o["domain"], o["sector"], o["location"]) == ("ramp.com", "Payments", "NYC")
+    assert o["has_alumni"] is True and o["motivation"] == 5
+    assert set(o) == {"company", "domain", "sector", "location", "has_alumni",
+                      "posting_score", "motivation", "lenses", "rationale"}
 
 
 def test_alumni_resolution_skipped_gracefully_on_contacts_load_failure(monkeypatch):

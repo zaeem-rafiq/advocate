@@ -45,17 +45,17 @@ Flow for building the target list (LAMP):
    carry several) and its one-line `rationale` so the user has context — then ask the user
    to gut-rate their MOTIVATION from 1 (low) to 5 (high) for each. Accept the scores
    exactly as given.
-4. Call `rank_companies` with the scored organizations to get the deterministic
-   Motivation -> Posting -> Alumni ranking. Add the user's `motivation` to each
-   organization and pass the companies back (ideally unchanged); `posting_score` and
-   `has_alumni` are recovered automatically from the sourced list, so a dropped field
-   won't break ranking. NEVER reorder companies yourself — ranking is pure code.
-5. Present the top 5, noting each company's motivation, posting signal, whether the user
-   has an alumni connection there, and its source-lens badge(s) + one-line rationale
-   (carry `lenses` and `rationale` over from the sourced list by company name — the
-   ranking output does not include them). Then call `save_pipeline` with the top 5
-   so the pipeline persists across sessions. Use `get_pipeline_status` to recall a
-   returning user's saved pipeline.
+4. Call `rank_companies` to get the deterministic Motivation -> Posting -> Alumni ranking.
+   Pass ONLY a minimal list of {"company": <name>, "motivation": <1-5 int>} for every
+   sourced organization — do NOT resend domain, sector, location, posting_score, has_alumni,
+   lenses, or rationale; those are recovered automatically from the sourced list server-side.
+   (Sending the full sourced dicts for ~40+ orgs overflows the tool call and fails.) NEVER
+   reorder companies yourself — ranking is pure code.
+5. Present the top 5 using the `rank_companies` output DIRECTLY — it already includes each
+   company's motivation, posting signal, alumni connection, source-lens badge(s) (`lenses`)
+   and one-line `rationale`. Do NOT reconstruct lenses or rationale yourself. Then call
+   `save_pipeline` for the top 5, passing only {"company", "motivation"} (and "status" if
+   relevant) per org. Use `get_pipeline_status` to recall a returning user's saved pipeline.
 
 Outreach (after the user picks a company from the top 5):
 6. Call `find_starter_contact` for the chosen company to get a real contact and the
@@ -75,9 +75,11 @@ Outreach (after the user picks a company from the top 5):
     gentle follow-up to contact #1. A response short-circuits to scheduling the conversation.
 
 Pipeline discipline:
-- After ranking, call `set_active_five` with the full ranked list to keep exactly five orgs
-  ACTIVE. When the user exhausts all contacts at a company, call `mark_company_exhausted` to
-  promote the next-ranked org into the active five.
+- After ranking, call `set_active_five` with the FULL ranked list IN RANKED ORDER to keep exactly
+  five orgs ACTIVE — but pass only {"company", "motivation"} per org (preserve the order from
+  `rank_companies`; that order defines promotion). Do NOT resend the other fields; they are
+  recovered server-side. When the user exhausts all contacts at a company, call
+  `mark_company_exhausted` to promote the next-ranked org into the active five.
 - When a contact responds (or goes silent past the 7-day follow-up), call `classify_contact`
   to label them Booster / Obligate / Curmudgeon so the user knows where to invest.
 

@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-06-07 — Fix: MALFORMED_FUNCTION_CALL on ranking a large org list (S-3 regression)
+
+A live dev-UI run surfaced a `MALFORMED_FUNCTION_CALL` when ranking ~67 sourced companies. Root
+cause: the orchestrator (gemini-2.5-flash, compositional/code-gen function calling, no
+`max_output_tokens` override) re-serialized the **entire** sourced list — including the `lenses` +
+`rationale` fields added by the S-3 change — as an inline Python literal for the `rank_companies`
+call; at ~67 fat orgs the generated code overran the output budget and truncated mid-literal. Both a
+latent large-list fragility and an S-3 regression (the ~2.1x payload from `rationale`+`lenses` —
+fields the ranker never even reads — was the trigger).
+
+Fix — stop round-tripping the heavy fields through the model; pass only `{company, motivation}` and
+rebuild the rest from the authoritative session-state stash:
+
+- **`core/sourcing.py`:** `signals_index` → `candidate_records_index` (now stashes the FULL record:
+  signals + domain/sector/location/lenses/rationale); new `reconcile_records` rebuilds a complete
+  org dict from a minimal `{company, motivation}` payload (override-on-match, identity passthrough on
+  miss). `reconcile_signals` unchanged (still the ranking-subset path).
+- **`agents/session_state.py`:** stash stores full records; new `recover_records` (full rebuild) for
+  `rank_companies`; `recover_signals` (subset) retained for `set_active_five`/`save_pipeline`.
+- **`agents/tools.py`:** `rank_companies` uses `recover_records` and now RETURNS `lenses` + `rationale`
+  (recovered from state) so the top-5 keeps its S-3 badges without the LLM re-supplying them.
+- **`agents/orchestrator.py`:** steps 4/5 + the active-five line instruct passing only
+  `{company, motivation}` (preserve ranked order for `set_active_five`); present the top-5 from the
+  `rank_companies` output directly. `set_active_five`/`save_pipeline` docstrings advertise the minimal
+  shape (they already recover signals; `.get()` tolerance keeps full dicts working — back-compat).
+
+Payload for 67 orgs drops from ~24 KB to ~2.7 KB of generated call. Empty state → identity
+passthrough (no regression). Tests +4. **237 passed, 1 skipped.** (Live re-run of the 67-org flow to
+confirm pending redeploy.)
+
 ## 2026-06-07 — TIARA prep: additive `depth` signal + "research was thin" caveat
 
 When the TIARA research loop (`prepare_informational`) never reached critic `grade="pass"` within

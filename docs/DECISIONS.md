@@ -310,3 +310,30 @@ Format: date · decision · rationale · reversible?
   preserved (verified: no `allUsers` binding). Combined suite on merged main **233 passed, 1 skipped**;
   functional smoke `authenticated GET /list-apps → 200 ["advocate_app"]`. Reversible: yes (re-deploy
   a prior revision / `gcloud run services update-traffic`).
+
+## 2026-06-07 — Fix: MALFORMED_FUNCTION_CALL when ranking a large org list (minimal-payload recovery)
+
+- **Root cause (live-found):** the orchestrator (gemini-2.5-flash, ADK compositional function calling
+  = the call emitted as generated Python code, no `max_output_tokens` override) inlined the entire
+  ~67-org list as a literal for `rank_companies`. The S-3 `lenses`+`rationale` fields ~2.1x'd the
+  payload (~11.5→24.4 KB / ~3K→6K output tokens), truncating the generated call → MALFORMED. Both a
+  latent large-list fragility AND an S-3 regression (the trigger). Diagnosed via a 4-agent workflow
+  (root-cause + affected-surface + fix-design + adversarial verify) over the live `main` code.
+- **Fix = pass the LLM's minimum, recover the rest server-side** (extends the existing
+  authoritative-signals design). The model sends only `{company, motivation}`; pure code rebuilds the
+  full org dict from session state. Chosen over the light fix (instruction-only) because the light
+  path left the high-entropy `rationale` as an LLM re-carry/fabrication surface on the top-5.
+- **Stash now holds the FULL candidate record** (was just `posting_score`/`has_alumni`):
+  `signals_index`→`candidate_records_index` adds domain/sector/location/lenses/rationale; new
+  `reconcile_records`/`recover_records` rebuild minimal dicts. `reconcile_signals`/`recover_signals`
+  kept UNCHANGED for `set_active_five`/`save_pipeline` (the subset is all they need) → no
+  shared-contract break, existing tests intact. `rank_companies` now returns `lenses`+`rationale` so
+  the top-5 keeps S-3 badges from the tool output, not LLM memory.
+- **Blast radius:** all three full-list consumers (`rank_companies` HIGH/failure site,
+  `set_active_five` HIGH, `save_pipeline` MEDIUM) now tolerate the minimal payload; the latter two
+  needed no code change (already `recover_signals`). `mark_company_exhausted`/`classify_contact` take
+  scalars — unaffected. `core/models.py:Org` and the ranker untouched (lenses/rationale ride as
+  pass-through dict keys, never on `Org`).
+- **Back-compat:** empty state → identity passthrough (existing no-context / without-state tests stay
+  green); tools keep `.get()` tolerance so a full dict still works. Tests +4 → **237 passed, 1
+  skipped**. Live 67-org re-run to confirm pending redeploy. Reversible: yes.

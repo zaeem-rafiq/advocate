@@ -48,11 +48,13 @@ def _promote_by_rank_index(records: List[OrgRecord], exhausted: str) -> List[Org
 def set_active_five(companies: List[dict], tool_context: ToolContext) -> dict:
     """Persist the ranked companies with the top five set ACTIVE, the rest CANDIDATE.
 
-    Pass the full ranked list (not just the top 5) so later orgs can be promoted
-    when an active one is exhausted.
+    Pass the full ranked list (not just the top 5), IN RANKED ORDER, so later orgs can be
+    promoted when an active one is exhausted (list order defines the promotion rank).
 
     Args:
-        companies: ranked company dicts (company, motivation, posting_score, has_alumni).
+        companies: ranked company dicts — pass only {"company", "motivation"} per org (in
+            ranked order). posting_score/has_alumni are recovered automatically from the
+            sourced list; do not resend them or the other fields.
 
     Returns:
         {"active": [company names], "candidates": [company names]}.

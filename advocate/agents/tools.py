@@ -12,7 +12,7 @@ from google.adk.tools.tool_context import ToolContext
 
 from advocate.agents.config import COMPANIES_CSV, CONTACTS_CSV
 from advocate.agents.errors import tool_safe
-from advocate.agents.session_state import recover_signals, stash_candidate_signals
+from advocate.agents.session_state import recover_records, stash_candidate_signals
 from advocate.core.models import Org
 from advocate.core.ranker import top_n
 from advocate.data.loaders import contacts_for_company, load_companies, load_contacts
@@ -26,17 +26,22 @@ def rank_companies(companies: List[dict], tool_context: ToolContext = None) -> d
     sort is deterministic pure code — never reorder companies yourself.
 
     Args:
-        companies: list of dicts, each with keys: company (str), domain (str),
-            sector (str), location (str), has_alumni (bool), posting_score (int 1-3),
-            motivation (int 1-5).
+        companies: list of dicts. Pass ONLY {"company": <name>, "motivation": <1-5 int>} per
+            org — do NOT resend domain/sector/location/posting_score/has_alumni/lenses/rationale;
+            those are recovered automatically from the sourced list. (Full dicts still work.)
 
     Returns:
-        A dict with "top5" (the five highest-ranked companies, best first) and
-        "ranked" (all companies in ranked order).
+        A dict with "top5" (the five highest-ranked companies, best first) and "ranked" (all in
+        ranked order). Each company dict includes company, domain, sector, location, has_alumni,
+        posting_score, motivation, and the source-lens badges (lenses) + one-line rationale, all
+        recovered from session state — so you can present the ranked list without re-supplying them.
     """
-    # Restore the authoritative posting_score/has_alumni captured at sourcing time, so a
-    # dropped field can't silently zero out a ranking signal; motivation comes from input.
-    companies = recover_signals(tool_context, companies)
+    # Rebuild the full candidate record (signals + domain/sector/location/lenses/rationale) from
+    # session state, so the model only sends {company, motivation}. Re-serializing the whole sourced
+    # list into this call overflows Gemini's function-call output (MALFORMED_FUNCTION_CALL) at ~40+
+    # orgs. Empty state → the input's own values pass through unchanged (no regression).
+    companies = recover_records(tool_context, companies)
+    by_company = {str(c.get("company", "")).strip().casefold(): c for c in companies}
     orgs = [
         Org(
             company=c.get("company", ""),
@@ -52,6 +57,9 @@ def rank_companies(companies: List[dict], tool_context: ToolContext = None) -> d
     ranked = top_n(orgs, len(orgs))
 
     def _dump(o: Org) -> dict:
+        # lenses/rationale aren't on the Org model (presentation-only); read them from the
+        # recovered record so the ranked output carries the S-3 badges + rationale.
+        rec = by_company.get(o.company.strip().casefold(), {})
         return {
             "company": o.company,
             "domain": o.domain,
@@ -60,6 +68,8 @@ def rank_companies(companies: List[dict], tool_context: ToolContext = None) -> d
             "has_alumni": o.has_alumni,
             "posting_score": o.posting_score,
             "motivation": o.motivation,
+            "lenses": list(rec.get("lenses", []) or []),
+            "rationale": str(rec.get("rationale", "") or ""),
         }
 
     return {"top5": [_dump(o) for o in ranked[:5]], "ranked": [_dump(o) for o in ranked]}
