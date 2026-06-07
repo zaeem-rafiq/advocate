@@ -206,3 +206,67 @@ The judging leans production-grade, not just a chat UI. 40% of the score lives i
 
 ### Technical Notes
 Record the demo against a seeded scenario so the 3B7 cadence and TIARA output show convincingly within two minutes.
+
+---
+
+# Phase 5 — Post-Submission v1.1 (product)
+
+> Increments that follow the frozen contest submission. The shipped build stays **draft-only**
+> (the slice-#9 no-send guardrail/test are untouched) until #10/#11 land. Sourced from
+> `prd-advocate.md` v1.0 (decisions D-3, D-6, D-7).
+
+## #10 — Consented Gmail send (observed 3B7 timing)
+
+**Phase:** 5 — Post-submission v1.1 · **Depends on:** #2, #4 · **Effort:** M · **Priority:** P1
+
+### Context
+The 3B7 timer is only as accurate as the send timestamp. Draft-only forces user attestation;
+consented send gives a real `observed` send event. Reverses the no-send guardrail behind a
+per-message approval gate — human-in-the-loop is preserved (no batch/auto-send).
+
+### Acceptance Criteria
+- [ ] On explicit per-message approval, send via the user's consented Gmail API (`gmail.send`, least-privilege)
+- [ ] Record the returned timestamp as an `observed` send event; 3B7 timer starts from it
+- [ ] No send without per-message approval; the guardrail test changes from "no send path exists" to "no send without approval"
+- [ ] `mailto`/clipboard + manual attestation (`attested`) remains the no-OAuth fallback (O-8)
+- [ ] 3B7 KPI is computed over the `observed` cohort only
+
+## #11 — Consented Google Calendar writes (3B7 reminders)
+
+**Phase:** 5 — Post-submission v1.1 · **Depends on:** #10 · **Effort:** S · **Priority:** P1
+
+### Context
+Match the send tier so the calendar half of the cadence is observable too, replacing the
+in-memory draft-only `CalendarPort` / ICS export.
+
+### Acceptance Criteria
+- [ ] Write 3B7 + follow-up reminders via the consented Calendar API (`calendar.events`) at send-confirmation
+- [ ] Same `CalendarPort` interface (swap the adapter, not the core); ICS export stays as the no-OAuth fallback
+- [ ] Reminder times carry explicit timezone; date math stays UTC
+
+## #12 — Wire the ≥10 outreach gate into drafting/UI
+
+**Phase:** 5 — Post-submission v1.1 · **Depends on:** #2 · **Effort:** S · **Priority:** P1
+
+### Context
+The pure-core gate (`advocate/core/gate.py`, D-6) is implemented and unit-tested; this wires it
+into the drafting tool / Screen 2→3 transition so outreach is actually locked below the threshold.
+
+### Acceptance Criteria
+- [ ] Drafting/outreach is blocked until `outreach_unlocked(orgs)` is true (≥10 rated)
+- [ ] Ranking stays visible below the threshold; only outreach is gated
+- [ ] A non-blocking "rate N more" nudge surfaces using `ratings_remaining(orgs)`
+
+## #13 — Web UI (6 screens)
+
+**Phase:** 5 — Post-submission v1.1 · **Depends on:** #1–#8 · **Effort:** L · **Priority:** P2
+
+### Context
+The contest submission demonstrates the agent/pipeline headlessly (ADK `POST /run` + CLI). The
+v1 product surface is the 6 screens in `prd-advocate.md` §9 (Onboarding, Target List & Ranking,
+Company Detail & Outreach, Pipeline Today View, TIARA Prep, Follow-Up Tracker).
+
+### Acceptance Criteria
+- [ ] Each screen implements the states + design notes in §9
+- [ ] Ranking screen shows the ordered key transparently (`M5 · P2 · A0`)
+- [ ] Today view is the daily driver (status-chip taxonomy shared with the Follow-Up tracker)
