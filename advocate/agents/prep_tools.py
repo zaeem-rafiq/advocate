@@ -96,8 +96,11 @@ Output the complete, improved research text (not just the new parts).
 def _compose_prompt(company: str, role: str, findings: str, sources: dict) -> str:
     source_list = "\n".join(f"{sid}: {s.title} ({s.url})" for sid, s in sources.items())
     return f"""
-Using ONLY the research and sources below, produce two sections for a job seeker
-preparing an informational interview at {company} (target role/function: {role}).
+Using ONLY the research and sources below, write a job seeker's prep for an informational
+interview at {company} (target role/function: {role}) in EXACTLY two sections.
+
+Start your reply directly with the line `BRIEF:`. Do NOT add any preamble, greeting, title,
+or markdown headers other than the two literal labels `BRIEF:` and `QUESTIONS:` below.
 
 BRIEF:
 3-5 sentences on {company}. After each factual claim, insert a citation tag of the EXACT
@@ -107,12 +110,14 @@ a listed source, leave it uncited or omit it.
 
 QUESTIONS:
 Exactly five TIARA questions, one per line, each labeled with its category and tailored to
-{company} where the research supports it:
+{company} where the research supports it (citation tags allowed here too):
 Trends: <question>
 Insights: <question>
 Advice: <question>
 Resources: <question>
 Assignments: <question>
+
+Output nothing before `BRIEF:` and nothing after the Assignments line.
 
 SOURCES (id: title (url)):
 {source_list}
@@ -252,20 +257,37 @@ def prepare_informational(company: str, role: str) -> dict:
         if not composed_text:
             return _fallback(company)
 
-        # Brief = everything before the QUESTIONS header (minus a markdown "BRIEF" header).
-        # The split is line-anchored so the word "questions" in prose can't truncate it.
-        raw_brief = re.split(r"(?im)^\s*#*\s*QUESTIONS\b\s*:?", composed_text, maxsplit=1)[0]
-        raw_brief = re.sub(r"(?im)^[#*\s]*BRIEF[#*:\s]*", "", raw_brief).strip()
-        brief = replace_citations(raw_brief, findings.sources).strip()
+        # Split the composed output into its brief region and its questions region at the FIRST
+        # TIARA label line. The compose model formats sections freely (e.g. "**About X**" /
+        # "**TIARA Questions**", or a chatty preamble, instead of literal BRIEF:/QUESTIONS:
+        # headers), so we split on the question LABELS — not on a header the model may not emit —
+        # to keep the questions out of the brief. (Regression: a live deploy check showed the old
+        # header-only split failing, duplicating every question into the brief.)
+        label = re.compile(
+            r"(?im)^\s*[-*\d.)\s]*(?:Trends|Insights|Advice|Resources|Assignments)\s*[:\-]"
+        )
+        split = label.search(composed_text)
+        brief_src = composed_text[: split.start()] if split else composed_text
+        questions_src = composed_text[split.start() :] if split else ""
+
+        # Drop stray section headers the model may have left around the brief region.
+        brief_src = re.sub(r"(?im)^[#*\s>]*(?:TIARA\s+)?QUESTIONS\b[^\n]*$", "", brief_src)
+        brief_src = re.sub(r"(?im)^[#*\s>]*BRIEF\b[#*:\s]*", "", brief_src).strip()
+
+        # Render <cite source="src-N"/> → Markdown links in BOTH the brief and the questions
+        # (citations appear in either; pure code, not the LLM, resolves them).
+        brief = replace_citations(brief_src, findings.sources).strip()
+        questions = ensure_tiara(
+            parse_tiara_text(replace_citations(questions_src, findings.sources))
+        )
 
         # Honesty guard: never present an empty brief (which would otherwise be masked to the
         # bare company name) or one whose every citation was dropped as uncollected — that
         # would be an evidence-stripped brief flagged as grounded. Degrade honestly instead.
-        if not brief or ("<cite" in raw_brief and "](" not in brief):
+        if not brief or ("<cite" in brief_src and "](" not in brief):
             _LOG.warning("compose produced an empty/unciteable brief for %r; falling back", company)
             return _fallback(company)
 
-        questions = ensure_tiara(parse_tiara_text(composed_text))
         return {"company": company, "brief": brief, "questions": questions, "grounded": True}
     except Exception:  # noqa: BLE001 — own the error: honest grounded=False, never a crash
         _LOG.exception("prepare_informational failed for company=%r role=%r", company, role)

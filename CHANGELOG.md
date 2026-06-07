@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-06-07 — Fix: TIARA compose-output parsing (found in live deploy check)
+
+A live grounded run against a real company (post-deploy of the pipeline above) exposed two
+defects the fake-client tests missed, because the compose model formats its output with its
+own headers/preamble rather than the literal `BRIEF:` / `QUESTIONS:` labels:
+
+- The header-only split failed (model wrote `**About X**` / `**TIARA Questions**`), so the
+  entire composed text — preamble + all five questions — was returned as the brief.
+- `replace_citations` ran only on the brief, so raw `<cite source="src-N"/>` tags leaked into
+  the TIARA question text.
+
+Fix (`advocate/agents/prep_tools.py`): split the composed output at the first TIARA *label*
+line (robust to whatever headers the model emits), strip stray `BRIEF`/`QUESTIONS` headers,
+and render citations → Markdown links in BOTH the brief and the questions. The compose prompt
+is also tightened (start with `BRIEF:`, no preamble/extra headers). Added a regression test
+reproducing the real model's output shape; re-verified live (clean brief, no duplicated
+questions, no raw tags, 5 cited questions). 175 passed, 1 skipped.
+
 ## 2026-06-07 — Iterative cited TIARA research pipeline
 
 `prepare_informational` is upgraded from a single grounded Gemini call into a
