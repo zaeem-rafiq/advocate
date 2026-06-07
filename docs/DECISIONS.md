@@ -158,3 +158,26 @@ Format: date · decision · rationale · reversible?
   Trace console (Trace Explorer) for `agenticprd` if you want visual confirmation of spans. (Correcting
   the record: my earlier "the deployed 2.x build is failing trace export" was a misattribution of the
   old revision's drain-window logs surfaced by `logs read` on an idle service.)
+
+## 2026-06-07 — Iterative cited TIARA research pipeline
+
+- **Lifted Deep Search as a PATTERN, not its ADK `LoopAgent`/`Runner`.** TIARA prep
+  (`prepare_informational`) is a synchronous FunctionTool returning a fixed dict; running a live
+  `LoopAgent` + `Runner` inside it would be async and untestable without an LLM. So the loop control
+  (`research_until_sufficient`), `Feedback` schema, escalate-on-pass, and the grounding callbacks were
+  re-expressed as pure code in `core/research.py` + `core/citations.py` with the four Gemini steps
+  injected as callables — same shape as the slice-#2 reviser loop (`core/drafting.py`). Reversible: yes.
+- **Loop bounded at 2 iterations** (`RESEARCH_MAX_ITERATIONS`, env-overridable) vs Deep Search's 5,
+  for the $50 budget alert. Worst case per prep ≈ 1 research + 2 critic + 2 refine + 1 compose = 6 calls
+  (grounded research/refine on Pro, critic/compose on Flash). Reversible: yes (env var).
+- **Citation confidence shown only when LOW** (`< 0.5`, flagged `(low confidence)`); high-confidence
+  cites render as clean links. Matches the "be honest about thin sources" ethos without cluttering the
+  brief. Considered + deferred: numeric score on every cite, and a structured `sources[]` in the return
+  (would change the contract → orchestrator update). Reversible: yes.
+- **Contract held stable** `{"company","brief","questions","grounded"}` → `orchestrator.py` untouched
+  (verified only consumers: orchestrator FunctionTool + instruction, and `test_tool_error_handling.py`
+  which pins the no-`@tool_safe` stance). `prepare_informational` keeps owning its errors.
+- **Honesty guard added (post-review):** an empty or fully-evidence-stripped composed brief (every
+  `<cite>` pointing to an uncollected source) degrades to the `grounded=False` fallback instead of being
+  masked to the bare company name with `grounded=True`. A final critic `grade=fail` still ships (facts are
+  real, just shallow) but is logged for audit — whether to flip `grounded=False` there is OPEN (ask first).
