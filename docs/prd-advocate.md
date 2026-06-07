@@ -447,7 +447,8 @@ CSV export from Screen 4 (P-5) is sufficient for a career center to review stude
 ## 10. Technical Architecture
 
 - **Agents (multi-agent ADK).** Root **Orchestrator** (Gemini 2.5 Flash) coordinates a **Sourcing**
-  agent (Gemini 2.5 Pro + Google Search grounding, exposed as an `AgentTool`) plus deterministic
+  tool (`source_organizations`, Gemini 2.5 Pro + Google Search grounding inside an iterative
+  research → coverage-gate → refine loop) plus deterministic
   function tools over a pure-code core: `rank_companies`, `set_active_five`/`mark_exhausted`,
   `find_starter_contact`, `draft_outreach_email` (+ eval gate), `log_outreach`/`check_cadence`,
   `classify_contact`, `prepare_informational` (TIARA), `schedule_post_interview_followups`.

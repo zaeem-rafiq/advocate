@@ -1,16 +1,15 @@
 """Root orchestrator agent for Advocate.
 
-Runs the LAMP front of the 2-Hour Job Search: delegate sourcing, capture the
-user's motivation scores, then call the deterministic ranker for the top 5. The
-Sourcing agent is wrapped as an AgentTool because it carries the built-in
-google_search grounding tool (which cannot be mixed with function tools on the
-same agent), while the orchestrator itself holds the function tools.
+Runs the LAMP front of the 2-Hour Job Search: source the target organizations,
+capture the user's motivation scores, then call the deterministic ranker for the
+top 5. Sourcing is a function tool that runs an iterative, grounded research loop
+internally (Google Search grounding lives inside the genai call, so it composes
+with the orchestrator's other function tools — no AgentTool wrapper needed).
 """
 from __future__ import annotations
 
 from google.adk.agents import Agent
 from google.adk.tools import FunctionTool
-from google.adk.tools.agent_tool import AgentTool
 
 from advocate.agents.config import ROUTINE_MODEL
 from advocate.agents.drafting import draft_outreach_email
@@ -25,7 +24,7 @@ from advocate.agents.scheduler_tools import (
     log_outreach,
     schedule_post_interview_followups,
 )
-from advocate.agents.sourcing import build_sourcing_agent
+from advocate.agents.sourcing import source_organizations
 from advocate.agents.state_tools import get_pipeline_status, save_pipeline
 from advocate.agents.tools import find_starter_contact, load_seed_companies, rank_companies
 
@@ -35,9 +34,12 @@ seeker. You coordinate specialist tools. Be concise and action-oriented.
 
 Flow for building the target list (LAMP):
 1. Ask the user for their target industry, geography, and function if not provided.
-2. Call the `sourcing_agent` tool to source at least 40 target organizations.
-   If grounded sourcing is unavailable, call `load_seed_companies` instead so the
-   pipeline still completes.
+2. Call the `source_organizations` tool with the industry, geography, and function. It
+   returns a structured `organizations` list (plus `count`, a `grounded` flag, and a
+   `met_minimum` flag) to pass straight to `rank_companies` after motivation scoring.
+   If it returns grounded=false or an empty `organizations` list, call
+   `load_seed_companies` instead so the pipeline still completes. If met_minimum is
+   false, the list is real but below the 40-org target — say so, and still proceed.
 3. Present the sourced organizations and ask the user to gut-rate their MOTIVATION
    from 1 (low) to 5 (high) for each. Accept the scores exactly as given.
 4. Call `rank_companies` with the scored organizations to get the deterministic
@@ -94,15 +96,14 @@ Guardrails you must honor:
 
 
 def build_root_agent() -> Agent:
-    """Construct the root orchestrator agent with its sub-agent tools."""
-    sourcing = build_sourcing_agent()
+    """Construct the root orchestrator agent with its function tools."""
     return Agent(
         name="advocate_orchestrator",
         model=ROUTINE_MODEL,
         description="Root orchestrator for the Advocate 2-Hour Job Search.",
         instruction=ORCHESTRATOR_INSTRUCTION,
         tools=[
-            AgentTool(agent=sourcing),
+            FunctionTool(func=source_organizations),
             FunctionTool(func=rank_companies),
             FunctionTool(func=load_seed_companies),
             FunctionTool(func=find_starter_contact),

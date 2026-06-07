@@ -187,3 +187,25 @@ Format: date · decision · rationale · reversible?
   failed). Per-claim `(low confidence)` flags already surface weak grounding at the right granularity. A
   user-facing depth caveat (an ADDITIVE `depth` signal, not overloading `grounded` → contract change,
   ask-first) is deferred until the eval/demo-QA pass shows the low-confidence flags are insufficient.
+
+## 2026-06-07 — Iterative loop-enforced Sourcing
+
+- **Sourcing converted from an ADK `AgentTool` sub-agent to a `FunctionTool`
+  (`source_organizations`).** Reusing the Deep Search loop (`research_until_sufficient`) requires
+  hosting the model steps as injected callables (the prep pattern), which can't live inside an ADK
+  autonomous agent. Google Search grounding now runs inside the genai call (as in
+  `prepare_informational`), so the AgentTool wrapper — previously needed because the built-in ADK
+  `google_search` tool can't be mixed with function tools on one agent — is no longer required.
+  Reversible: yes (revert to the sub-agent), but that loses the count gate + structured output.
+- **The Sourcing critic is PURE CODE, not an LLM.** Unlike TIARA prep (where "good enough" is a
+  judgment call), sourcing's gate is countable: ≥40 distinct orgs spanning all four LAMP lenses. So
+  `evaluate` = `coverage_feedback` (deterministic) and follow-up queries are templated from the
+  deficient lenses — no extra LLM critic call per iteration. Bounded at `SOURCING_MAX_ITERATIONS`=2
+  (≤3 grounded Pro calls worst case), same $50-budget rationale as the prep loop. Reversible: yes.
+- **`met_minimum` flag instead of forcing the seed fallback when <40.** A real, grounded-but-thin
+  result ships (`met_minimum=False`, logged) rather than discarding real orgs for the demo CSV; the
+  orchestrator falls back to `load_seed_companies` only on `grounded=false`/empty. Reversible: yes.
+- **`posting_score` NOT derived from the active-postings lens (deferred).** The pre-existing grounded
+  path never emitted `posting_score` (the ranker defaults it to 0); deriving it would change ranking
+  behavior and risks fabricating a signal. Left for a separate decision once eval data warrants it;
+  canonical `core/models.py:Org` untouched. Reversible: yes.

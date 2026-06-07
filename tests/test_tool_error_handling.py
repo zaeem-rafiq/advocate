@@ -19,6 +19,7 @@ from advocate.agents.scheduler_tools import (
     log_outreach,
     schedule_post_interview_followups,
 )
+from advocate.agents.sourcing import source_organizations
 from advocate.agents.state_tools import get_pipeline_status, save_pipeline
 from advocate.agents.tools import find_starter_contact, load_seed_companies, rank_companies
 
@@ -39,7 +40,7 @@ GUARDED_TOOLS = [
 
 # These handle their own errors with a richer contract, so they are deliberately NOT
 # wrapped by the generic @tool_safe boundary.
-SELF_HANDLING_TOOLS = [prepare_informational, draft_outreach_email]
+SELF_HANDLING_TOOLS = [prepare_informational, draft_outreach_email, source_organizations]
 
 
 def test_all_io_tools_have_the_error_boundary():

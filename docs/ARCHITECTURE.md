@@ -5,15 +5,16 @@ deployed to **Cloud Run** (scale-to-zero) with **Firestore** for per-user state.
 
 ## Agent topology
 
-A root orchestrator (Gemini 2.5 Flash) coordinates specialist capabilities. The Sourcing
-agent (Gemini 2.5 Pro) carries Google Search grounding and is exposed to the orchestrator
-as an `AgentTool`; everything else is a deterministic function tool over a pure-code core.
+A root orchestrator (Gemini 2.5 Flash) coordinates specialist capabilities, all exposed as
+deterministic function tools over a pure-code core. `source_organizations` (Gemini 2.5 Pro)
+runs Google Search grounding *inside* an iterative research → coverage-gate → refine loop,
+enforcing the ≥40-org LAMP minimum in pure code.
 
 ```mermaid
 flowchart TD
     U[Job seeker] -->|industry, geo, function| O[Root Orchestrator<br/>Gemini 2.5 Flash]
 
-    O -->|AgentTool| S[Sourcing Agent<br/>Gemini 2.5 Pro + Google Search]
+    O --> S[source_organizations<br/>Gemini 2.5 Pro + Google Search<br/>research→gate→refine loop]
     S -->|>=40 grounded orgs| O
 
     O --> R[rank_companies<br/>pure M->P->A ranker]
