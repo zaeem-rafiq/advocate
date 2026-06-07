@@ -226,3 +226,14 @@ Format: date · decision · rationale · reversible?
   reserialization hazard). Verified live: 45 orgs, 9 at posting_score=2, has_alumni=True on a real match.
   Reversible: yes. Deferred: multi-lens posting strength (S-3 source_lens(es)); a state-based motivation
   merge instead of trusting the LLM to keep fields.
+- **Authoritative ranking signals in ADK session state (state-based motivation→rank merge — the
+  deferred robust fix, now done).** posting_score/has_alumni are stashed at sourcing / seed-load time
+  (`state["candidate_signals"]`, keyed by casefold company) and recovered at rank/persist time, so the
+  LLM dropping those fields while adding motivation can't zero them out. New pure helpers
+  `core/sourcing.py:signals_index`/`reconcile_signals` + `agents/session_state.py` (duck-typed
+  tool_context, no ADK import). `tool_context` added to source_organizations/rank_companies/
+  load_seed_companies as `ToolContext = None` — ADK injects it and hides it from the model schema
+  (verified by introspection). Degrades to LLM-provided values when state is empty → NO regression.
+  Session state is in-memory/per-conversation (the candidate list is transient); the durable top-5
+  still persists via save_pipeline/Firestore. Reversible: yes. Deferred: cross-session candidate
+  persistence (intentionally transient).

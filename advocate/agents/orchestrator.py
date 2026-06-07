@@ -43,10 +43,10 @@ Flow for building the target list (LAMP):
 3. Present the sourced organizations and ask the user to gut-rate their MOTIVATION
    from 1 (low) to 5 (high) for each. Accept the scores exactly as given.
 4. Call `rank_companies` with the scored organizations to get the deterministic
-   Motivation -> Posting -> Alumni ranking. Pass each organization through UNCHANGED —
-   preserve every field from `source_organizations` (especially `posting_score` and
-   `has_alumni`) and only ADD the user's `motivation`. Do NOT drop or recompute those
-   fields, and NEVER reorder companies yourself — ranking is pure code.
+   Motivation -> Posting -> Alumni ranking. Add the user's `motivation` to each
+   organization and pass the companies back (ideally unchanged); `posting_score` and
+   `has_alumni` are recovered automatically from the sourced list, so a dropped field
+   won't break ranking. NEVER reorder companies yourself — ranking is pure code.
 5. Present the top 5, noting each company's motivation, posting signal, and whether
    the user has an alumni connection there. Then call `save_pipeline` with the top 5
    so the pipeline persists across sessions. Use `get_pipeline_status` to recall a

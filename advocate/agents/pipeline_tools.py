@@ -14,6 +14,7 @@ from google.adk.tools.tool_context import ToolContext
 
 from advocate.agents.config import CONTACTS_CSV
 from advocate.agents.errors import tool_safe
+from advocate.agents.session_state import recover_signals
 from advocate.agents.state_tools import _user_id
 from advocate.core.active_five import ACTIVE_LIMIT, active_count, initialize_active
 from advocate.core.classification import classify_responder
@@ -56,6 +57,7 @@ def set_active_five(companies: List[dict], tool_context: ToolContext) -> dict:
     Returns:
         {"active": [company names], "candidates": [company names]}.
     """
+    companies = recover_signals(tool_context, companies)
     repo = get_repository()
     user = _user_id(tool_context)
     orgs = [
