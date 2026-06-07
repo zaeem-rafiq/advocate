@@ -147,6 +147,17 @@ def _meta(uri="https://acme.com/news", title="Acme News", domain="acme.com", sco
     )
 
 
+def _meta_searched(queries=("top fintech companies in NYC", "largest NYC fintechs")):
+    """The REAL grounded-JSON shape: the model searched (web_search_queries present) but a
+    structured reply has no text spans, so it emits ZERO grounding chunks/supports."""
+    return NS(
+        web_search_queries=list(queries),
+        grounding_chunks=[],
+        grounding_supports=[],
+        search_entry_point=NS(rendered_content="<div/>"),
+    )
+
+
 def _resp(text, metadatas=()):
     return NS(text=text, candidates=[NS(grounding_metadata=m) for m in metadatas])
 
@@ -217,6 +228,23 @@ def test_refine_runs_to_clear_a_lens_gap_and_merges_new_orgs(monkeypatch):
     assert result["met_minimum"] is True  # 10 + 35 = 45
     names = {o["company"] for o in result["organizations"]}
     assert "Co0" in names and "Co100" in names  # refine's orgs merged in
+
+
+def test_grounded_via_web_search_queries_without_chunks(monkeypatch):
+    """Regression (live deploy check): Gemini 2.5 Pro returning a JSON org list grounds via
+    web_search_queries but emits ZERO grounding chunks/supports. The old `not sources` guard
+    discarded a fully grounded 41-org list; grounding must be detected from the searches."""
+
+    def router(model, contents, config):
+        assert _is_grounded(config)
+        return _resp(_orgs_json(41), metadatas=[_meta_searched()])  # searched, but no chunks
+
+    _install(monkeypatch, router)
+    result = source_organizations("Fintech", "New York City", "Product Management")
+    assert result["grounded"] is True  # was False before the fix
+    assert result["met_minimum"] is True
+    assert result["count"] == 41
+    assert len(result["organizations"]) == 41
 
 
 def test_thin_no_grounding_sources_falls_back_honestly(monkeypatch):

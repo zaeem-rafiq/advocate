@@ -1,5 +1,20 @@
 # Lessons
 
+## 2026-06-07 — a grounding/citation signal proven on PROSE doesn't transfer to STRUCTURED output
+- **What went wrong:** Reused prep's grounding honesty-guard (`collect_sources` over
+  `grounding_chunks`) for `source_organizations`. prep emits cited PROSE (chunks/supports tie to
+  text spans), but sourcing emits a JSON array — which has no text spans, so Gemini 2.5 Pro returns
+  `web_search_queries` (12 searches) but ZERO grounding chunks. The `not sources` guard discarded a
+  fully grounded 41-org list, so the tool fell back to seed companies on EVERY live call. All 20
+  offline fake-client tests passed because the fakes carried prose-shaped `grounding_chunks` — they
+  never reproduced the real JSON-output grounding shape. Only the live deploy check caught it.
+- **What to do instead:** When a signal (grounding, citations, parsing) is validated against one
+  OUTPUT MODE (prose), re-validate it against every other output mode the same code path can produce
+  (structured/JSON) — against a REAL run, not just fakes shaped like the mode you already trust.
+  Shape the fake's response metadata to match what the real model actually returns for THAT mode.
+  (Generalizes the global "test-mode mocks only catch what their tests assert" anti-pattern and PR
+  #4's "verify a free-form-output parser against a real run" lesson to response-metadata signals.)
+
 ## 2026-06-06 — git branch-per-slice
 - **What went wrong:** After merging slice #8 to main, I started slice #9 work without
   first creating a `slice/9-*` branch, so all of #9 was committed directly to main —

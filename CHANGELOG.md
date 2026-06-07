@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-06-07 — Fix: grounded sourcing returned 0 orgs in prod (grounding-signal mismatch)
+
+The live deploy check (revision `advocate-00017-9ml`) showed `source_organizations` returning
+`grounded=False` / `count=0` against the real model — falling back to the seed list on every call.
+Root cause: sourcing reused prep's grounding signal — `collect_sources` over `grounding_chunks` —
+but a **structured (JSON) reply has no text spans**, so Gemini 2.5 Pro emits `web_search_queries`
+(12 searches) yet **zero** grounding chunks/supports. The `not sources` guard therefore discarded a
+fully grounded 41-org list. (The offline fake-client tests passed because their fakes carried
+prose-shaped `grounding_chunks` — they never exercised the real JSON-output grounding shape.)
+
+Fix: added `core/citations.py:grounding_used(metadatas)` — grounding is proven by
+`web_search_queries` OR `grounding_chunks` — and switched the sourcing guard and the returned
+`grounded` flag to it (dropping the citation-collection path sourcing never rendered). The silent
+short-circuit now logs *why* it fell back. `prepare_informational` is unchanged (its prose output
+cites correctly via chunks). **Verified live:** `source_organizations("Fintech","New York City",
+"Product Management")` → `grounded=True`, `met_minimum=True`, **42 orgs**. Added regression tests
+(`grounding_used` units + the chunks-free JSON shape). **200 passed, 1 skipped.**
+
 ## 2026-06-07 — Iterative, count-enforced Sourcing (Deep Search loop reuse)
 
 `source_organizations` replaces the single-pass Sourcing **sub-agent** (which merely asked for
