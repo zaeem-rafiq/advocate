@@ -30,7 +30,7 @@ for sourcing). State in Firestore (per-user isolation). Runtime: Cloud Run (scal
 ```bash
 uv venv --python 3.12
 uv pip install pytest pytest-cov google-adk google-cloud-firestore
-uv run --no-project pytest                 # 98 unit tests; pure-code core ~100% covered
+uv run --no-project pytest                 # 260 passed, 1 skipped; pure-code core ~100% covered
 python -m advocate.cli                     # offline deterministic tracer-bullet demo
 ```
 
@@ -56,8 +56,9 @@ The Cloud Run service is authenticated-only. The ADK app name is `advocate_app`.
 URL=https://advocate-964730889018.us-central1.run.app
 TOK=$(gcloud auth print-identity-token)
 
-# Create a session, then drive the flow (each call returns the agent's events as JSON):
-curl -s -X POST -H "Authorization: Bearer $TOK" \
+# Create a session, then drive the flow (each call returns the agent's events as JSON).
+# The Content-Type header is required — without it the session create returns 422.
+curl -s -X POST -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" \
   "$URL/apps/advocate_app/users/priya/sessions/s1" -d '{}'
 
 curl -s -X POST -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" \

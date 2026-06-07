@@ -16,7 +16,7 @@ Tracer-bullet build: get one seeker through one company end-to-end first (inputs
 
 ### What gets built
 - ADK orchestrator skeleton deployed to Cloud Run
-- Sourcing agent (grounded via Vertex AI Search) producing ~40 orgs
+- Sourcing agent (grounded via Google Search grounding) producing ~40 orgs
 - Human-in-the-loop motivation capture (1–5 per org)
 - Deterministic M → P → A ranker returning top 5 (postings/affiliation stubbed initially)
 - Drafting agent producing one 5-point email for one selected company
@@ -26,7 +26,7 @@ Tracer-bullet build: get one seeker through one company end-to-end first (inputs
 - Decision on affiliation + postings data approach (stub with user CSV / fixed scores for this phase)
 
 ### Risks & spikes
-- Confirm Vertex AI Search grounding reliably sources orgs by industry/geo/function
+- Confirm Google Search grounding reliably sources orgs by industry/geo/function
 - Confirm the ADK multi-agent handoff pattern (orchestrator → sub-agent → return)
 
 ### Done when

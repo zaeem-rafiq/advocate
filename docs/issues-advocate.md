@@ -33,7 +33,7 @@ The thinnest end-to-end path that proves the multi-agent architecture works: thr
 
 ### Acceptance Criteria
 - [ ] Orchestrator + Sourcing agent deployed to Cloud Run, callable end-to-end
-- [ ] Given industry + geography + function, Sourcing agent returns ≥ 40 distinct orgs via Vertex AI Search grounding
+- [ ] Given industry + geography + function, Sourcing agent returns ≥ 40 distinct orgs via Google Search grounding
 - [ ] User can enter a motivation score (1–5) per org via an interactive prompt
 - [ ] Deterministic ranker sorts by Motivation → Posting → Alumni and returns a top 5 (postings/affiliation may be stubbed this issue)
 
@@ -164,7 +164,7 @@ Removes pre-interview prep paralysis and makes the conversation good — which i
 - [ ] For an obscure company with thin sources, the agent returns a graceful fallback rather than fabricating
 
 ### Technical Notes
-Grounding/RAG via Vertex AI Search. The "Resources" question is the pivot — make sure it's always present.
+Grounding via Google Search grounding (Gemini's built-in `google_search` tool). The "Resources" question is the pivot — make sure it's always present.
 
 ---
 
