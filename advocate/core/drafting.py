@@ -16,6 +16,11 @@ from advocate.core.email_eval import EmailEval, evaluate_email
 # its prompt (e.g. "the previous draft failed X, try again") across retries.
 Generator = Callable[[int], str]
 
+# revise(failing_draft, its_eval) -> minimally-edited draft. Lets a later attempt
+# repair the previous draft (fixing only the failed checks) instead of regenerating
+# it from scratch. The reviser only PROPOSES; evaluate_email still decides.
+Reviser = Callable[[str, "EmailEval"], str]
+
 DEFAULT_MAX_ATTEMPTS = 4
 
 
@@ -44,12 +49,25 @@ def draft_until_passing(
     generate: Generator,
     connection_terms: Sequence[str],
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
+    revise: Reviser | None = None,
 ) -> DraftResult:
-    """Generate drafts until one passes the eval suite, or raise DraftRejected."""
+    """Generate drafts until one passes the eval suite, or raise DraftRejected.
+
+    The first attempt is always generated fresh. On later attempts, if `revise` is
+    supplied, the previous failing draft is minimally edited toward compliance
+    instead of regenerated from scratch; otherwise `generate` is called again. Every
+    attempt — generated or revised — is re-checked by `evaluate_email`, which remains
+    the sole authority on whether a draft may be surfaced.
+    """
     last_eval: EmailEval | None = None
+    last_text: str | None = None
     for attempt in range(max_attempts):
-        text = generate(attempt)
+        if attempt == 0 or revise is None or last_text is None or last_eval is None:
+            text = generate(attempt)
+        else:
+            text = revise(last_text, last_eval)
         last_eval = evaluate_email(text, connection_terms)
+        last_text = text
         if last_eval.passed:
             return DraftResult(email=text, evaluation=last_eval, attempts=attempt + 1)
     raise DraftRejected(attempts=max_attempts, last_eval=last_eval)

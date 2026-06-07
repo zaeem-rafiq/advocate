@@ -1,9 +1,11 @@
 """Drafting tool — generates a compliant 5-point outreach email.
 
-Generation runs on Gemini (Flash; drafting is routine), but the binary eval gate
-is enforced in pure code via draft_until_passing: a draft that fails any check is
-regenerated and NEVER surfaced. The orchestrator calls draft_outreach_email; the
-genai client is lazy-imported so the pure-code tests don't need it.
+Generation runs on Gemini (Flash; drafting is routine), but the binary eval gate is
+enforced in pure code via draft_until_passing: the first draft is generated, and any
+draft that fails a check is minimally REVISED (not regenerated from scratch) toward
+compliance — a draft that never passes is NEVER surfaced. The reviser only proposes;
+evaluate_email remains the sole authority. The orchestrator calls draft_outreach_email;
+the genai client is lazy-imported so the pure-code tests don't need it.
 """
 from __future__ import annotations
 
@@ -11,7 +13,7 @@ from typing import List
 
 from advocate.agents.config import LOCATION, PROJECT, ROUTINE_MODEL, USE_VERTEX
 from advocate.core.drafting import DraftRejected, draft_until_passing
-from advocate.core.email_eval import MAX_WORDS
+from advocate.core.email_eval import MAX_WORDS, EmailEval
 
 # Dalton's 5-point connection-first email, distilled into a generation contract.
 _FEW_SHOT = (
@@ -23,8 +25,10 @@ _FEW_SHOT = (
 )
 
 
-def _build_prompt(contact_name: str, company: str, background: str, connection: str, attempt: int) -> str:
-    base = f"""
+def _build_prompt(contact_name: str, company: str, background: str, connection: str) -> str:
+    # The first draft only. Failures are repaired by _build_revise_prompt / revise(),
+    # so there is no per-retry "you failed, try again" variant here anymore.
+    return f"""
 Write a connection-first networking outreach email following Steve Dalton's 5-point
 structure. STRICT constraints (a machine will reject the draft otherwise):
 - {MAX_WORDS} words MAXIMUM.
@@ -42,19 +46,50 @@ Example of the right voice and length:
 
 Return ONLY the email body, no subject line, no preamble.
 """.strip()
-    if attempt > 0:
-        base += (
-            f"\n\nYour previous attempt failed the automated checks. Re-write it: keep it "
-            f"under {MAX_WORDS} words, ensure the connection ({connection}) appears, remove "
-            f"any job/referral request, and make sure the ask is a question."
-        )
-    return base
 
 
 def _connection_terms(company: str, connection: str) -> List[str]:
     terms = [company, "alum", "alumni"]
     terms += [w for w in connection.replace(",", " ").split() if len(w) > 2]
     return terms
+
+
+# Per-check repair instructions, keyed by the failure names from email_eval. Only the
+# checks that actually failed are injected, so the edit stays minimal and targeted.
+_FIX_INSTRUCTIONS = {
+    "word_count": f"Trim it to {MAX_WORDS} words or fewer without dropping the connection or the ask.",
+    "no_job_mention": (
+        "Remove any request for a job, referral, application, or open position — keep it "
+        "an advice/learning conversation."
+    ),
+    "connection_present": "Make the shared connection explicit; it MUST appear in the email.",
+    "question_form_ask": "Rephrase the ask as a question ending in '?'.",
+}
+
+
+def _build_revise_prompt(draft: str, failures: List[str], connection: str) -> str:
+    """Prompt the model to MINIMALLY edit a failing draft to fix only the flagged checks."""
+    needed = "\n".join(f"- {_FIX_INSTRUCTIONS[f]}" for f in failures if f in _FIX_INSTRUCTIONS)
+    return f"""
+You are a careful editor. Minimally revise the outreach email below so it passes the
+automated compliance checks. Make the SMALLEST edit that fixes the listed problems —
+preserve the original voice, structure, specifics, and length as much as possible. Do
+NOT introduce new claims or facts.
+
+Problems to fix:
+{needed}
+
+Hard constraints (a machine re-checks these):
+- {MAX_WORDS} words MAXIMUM.
+- The shared connection ({connection}) MUST appear.
+- No request for a job, referral, application, or open position.
+- The ask MUST be a question ending in '?'.
+
+Email to revise:
+{draft}
+
+Return ONLY the revised email body, no preamble, no subject line.
+""".strip()
 
 
 def draft_outreach_email(
@@ -65,7 +100,7 @@ def draft_outreach_email(
 ) -> dict:
     """Draft a compliant connection-first outreach email for a contact.
 
-    The draft is generated, then regenerated until it passes the binary eval
+    The draft is generated, then minimally revised until it passes the binary eval
     (<=100 words, no job request, connection present, question-form ask). A draft
     that cannot pass is NOT surfaced — an error is returned instead.
 
@@ -84,13 +119,20 @@ def draft_outreach_email(
     client = genai.Client(vertexai=USE_VERTEX, project=PROJECT or None, location=LOCATION)
 
     def generate(attempt: int) -> str:
-        prompt = _build_prompt(contact_name, company, your_background, connection, attempt)
+        # `attempt` is part of the Generator contract but unused: attempt 0 is the only
+        # generated draft; later attempts are handled by revise() below.
+        prompt = _build_prompt(contact_name, company, your_background, connection)
+        resp = client.models.generate_content(model=ROUTINE_MODEL, contents=prompt)
+        return (resp.text or "").strip()
+
+    def revise(draft: str, evaluation: EmailEval) -> str:
+        prompt = _build_revise_prompt(draft, evaluation.failures, connection)
         resp = client.models.generate_content(model=ROUTINE_MODEL, contents=prompt)
         return (resp.text or "").strip()
 
     terms = _connection_terms(company, connection)
     try:
-        result = draft_until_passing(generate, terms)
+        result = draft_until_passing(generate, terms, revise=revise)
     except DraftRejected as exc:
         return {"passed": False, "error": str(exc), "failures": exc.last_eval.failures}
 
