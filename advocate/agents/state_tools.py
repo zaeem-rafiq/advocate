@@ -10,6 +10,7 @@ from typing import List
 
 from google.adk.tools.tool_context import ToolContext
 
+from advocate.agents.errors import tool_safe
 from advocate.core.models import OrgStatus
 from advocate.core.state import OrgRecord
 from advocate.data.repository_factory import get_repository
@@ -33,6 +34,7 @@ def _to_record(c: dict) -> OrgRecord:
     )
 
 
+@tool_safe
 def save_pipeline(companies: List[dict], tool_context: ToolContext) -> dict:
     """Persist the user's working set of companies to durable pipeline state.
 
@@ -50,6 +52,7 @@ def save_pipeline(companies: List[dict], tool_context: ToolContext) -> dict:
     return {"saved": len(companies)}
 
 
+@tool_safe
 def get_pipeline_status(tool_context: ToolContext) -> dict:
     """Return the user's persisted pipeline (companies, statuses, scheduled actions).
 

@@ -12,6 +12,7 @@ from datetime import date
 from google.adk.tools.tool_context import ToolContext
 
 from advocate.agents.config import CONTACTS_CSV
+from advocate.agents.errors import tool_safe
 from advocate.agents.state_tools import _user_id
 from advocate.core.models import OrgStatus
 from advocate.core.state import OrgRecord
@@ -37,6 +38,7 @@ def _bootstrap_record(company: str) -> OrgRecord:
     )
 
 
+@tool_safe
 def log_outreach(company: str, contact_name: str, outreach_date: str, tool_context: ToolContext) -> dict:
     """Log that the user sent outreach, and schedule the 3B7 follow-up reminders.
 
@@ -65,6 +67,7 @@ def log_outreach(company: str, contact_name: str, outreach_date: str, tool_conte
     return {"company": company, "contact": contact_name, "reminders": reminders}
 
 
+@tool_safe
 def check_cadence(
     company: str,
     contact_name: str,
@@ -101,6 +104,7 @@ def check_cadence(
     }
 
 
+@tool_safe
 def schedule_post_interview_followups(
     company: str,
     contact_name: str,

@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-06-07 — Cross-cutting tool error boundary (`tool_safe`)
+
+External/LLM/IO faults in agent function tools no longer crash the agent turn. A new
+`tool_safe` boundary catches uncaught exceptions, logs them server-side (Cloud Trace /
+Logging), and returns a structured `{"error": ...}` the orchestrator can relay — mirroring
+the existing `error`-field convention. Surfaced messages are PII-scrubbed (service-account
+emails redacted) and length-capped before reaching the model or user.
+
+- `advocate/agents/errors.py` (new) — `tool_safe` decorator + `scrub_message` (email
+  redaction + truncation). `functools.wraps` preserves ADK schema introspection (tested).
+- Applied to 12 IO/LLM tools across `tools.py`, `state_tools.py`, `pipeline_tools.py`,
+  `scheduler_tools.py`.
+- `draft_outreach_email` now handles its own errors with a uniform `{"passed": False,
+  "error", "failures"}` contract (compliance failure OR backend fault) — not wrapped by
+  `tool_safe`. `prepare_informational` keeps its `grounded=False` fallback (also unwrapped).
+- `orchestrator.py` instruction: treat an `error` field as failure; never invent data.
+- Tests: `tests/test_tool_safe.py` (9) + `tests/test_tool_error_handling.py` (5).
+  135 passed, 1 skipped.
+
+Known limitations / follow-ups:
+- The sourcing sub-agent is an ADK `AgentTool`, not a function tool, so `tool_safe` does not
+  wrap it; its faults rely on the ADK layer + the `load_seed_companies` fallback.
+- `tool_safe` catches broadly (intentional at a tool edge); a future guardrail-violation
+  exception type should be exempted so it fails loud rather than degrading to a soft error.
+- No automated check that the LLM obeys the error-handling instruction (needs live model
+  calls — belongs in an eval / demo-QA pass).
+
 ## 2026-06-06 — Draft reviser loop (LLM-Auditor reviser pattern)
 
 When a generated outreach email fails the binary eval gate, the failing draft is now

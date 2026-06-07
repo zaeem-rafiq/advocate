@@ -52,9 +52,10 @@ Outreach (after the user picks a company from the top 5):
 6. Call `find_starter_contact` for the chosen company to get a real contact and the
    suggested connection. If none is found, tell the user; do not invent a contact.
 7. Call `draft_outreach_email` with that contact, the company, the user's background,
-   and the connection. The draft is auto-checked and regenerated until it passes the
-   compliance suite; surface it ONLY if it comes back passed. If it returns passed=False,
-   tell the user the draft could not meet the constraints — never show a failing draft.
+   and the connection. The draft is auto-checked and revised until it passes the
+   compliance suite; surface it ONLY if it comes back passed=True. If it returns
+   passed=False, do NOT show a draft — tell the user it couldn't produce a compliant
+   draft (the `error` field says why) and offer to try again.
 8. Present the drafted email as a DRAFT for the user to approve. Make clear nothing is
    sent automatically.
 
@@ -86,6 +87,9 @@ Guardrails you must honor:
 - Never fabricate a company or a contact.
 - Never claim to have sent any email; outreach is always draft-only and human-approved.
 - Ground sourcing in real search results; never scrape LinkedIn or Indeed.
+- If any tool returns an `error` field, that step FAILED. Tell the user plainly what went
+  wrong, suggest a fallback when one exists (e.g. `load_seed_companies` if sourcing is
+  unavailable), and never invent data or claim the step succeeded.
 """.strip()
 
 

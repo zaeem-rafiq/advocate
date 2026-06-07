@@ -13,6 +13,7 @@ from typing import List, Optional
 from google.adk.tools.tool_context import ToolContext
 
 from advocate.agents.config import CONTACTS_CSV
+from advocate.agents.errors import tool_safe
 from advocate.agents.state_tools import _user_id
 from advocate.core.active_five import ACTIVE_LIMIT, active_count, initialize_active
 from advocate.core.classification import classify_responder
@@ -42,6 +43,7 @@ def _promote_by_rank_index(records: List[OrgRecord], exhausted: str) -> List[Org
     return result
 
 
+@tool_safe
 def set_active_five(companies: List[dict], tool_context: ToolContext) -> dict:
     """Persist the ranked companies with the top five set ACTIVE, the rest CANDIDATE.
 
@@ -79,6 +81,7 @@ def set_active_five(companies: List[dict], tool_context: ToolContext) -> dict:
     }
 
 
+@tool_safe
 def mark_company_exhausted(company: str, tool_context: ToolContext) -> dict:
     """Mark a company EXHAUSTED and promote the next-ranked candidate into the five.
 
@@ -109,6 +112,7 @@ def mark_company_exhausted(company: str, tool_context: ToolContext) -> dict:
     }
 
 
+@tool_safe
 def classify_contact(
     company: str,
     contact_name: str,
