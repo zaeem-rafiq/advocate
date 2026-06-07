@@ -180,4 +180,10 @@ Format: date · decision · rationale · reversible?
 - **Honesty guard added (post-review):** an empty or fully-evidence-stripped composed brief (every
   `<cite>` pointing to an uncollected source) degrades to the `grounded=False` fallback instead of being
   masked to the bare company name with `grounded=True`. A final critic `grade=fail` still ships (facts are
-  real, just shallow) but is logged for audit — whether to flip `grounded=False` there is OPEN (ask first).
+  real, just shallow) but is logged for audit. **RESOLVED 2026-06-07:** keep `grounded=True` in this
+  case. `grounded` means "backed by real cited sources" (true here — the guard requires ≥1 source and
+  refine only adds), NOT "deep enough"; flipping would route through `_fallback` and *discard* the real,
+  cited, company-specific brief + tailored questions for generic boilerplate (and falsely imply retrieval
+  failed). Per-claim `(low confidence)` flags already surface weak grounding at the right granularity. A
+  user-facing depth caveat (an ADDITIVE `depth` signal, not overloading `grounded` → contract change,
+  ask-first) is deferred until the eval/demo-QA pass shows the low-confidence flags are insufficient.

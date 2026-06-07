@@ -35,8 +35,10 @@ Known limitations / follow-ups:
   supplied source ids; tag fidelity is exercised via the fake client, not a live model —
   belongs in an eval / demo-QA pass.
 - A final critic verdict of `grade=fail` (loop exhausted the budget) still ships the brief
-  as grounded (the facts are real, just shallow) and is logged for audit; whether to flip
-  `grounded=False` in that case is an open product decision (SPEC §6 "ask first").
+  as grounded (the facts are real, just shallow) and is logged for audit. Decision (2026-06-07):
+  keep it grounded — `grounded` means "backed by real sources," not "deep enough," and flipping
+  would discard real cited research for boilerplate. A user-facing depth caveat (additive, not
+  overloading `grounded`) is deferred until eval data warrants it.
 
 ## 2026-06-07 — Cross-cutting tool error boundary (`tool_safe`)
 
