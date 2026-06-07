@@ -237,3 +237,38 @@ Format: date · decision · rationale · reversible?
   Session state is in-memory/per-conversation (the candidate list is transient); the durable top-5
   still persists via save_pipeline/Firestore. Reversible: yes. Deferred: cross-session candidate
   persistence (intentionally transient).
+
+## 2026-06-07 — PRD S-3: multi-lens source tags + per-org grounded rationale
+
+- **`SourcedOrg.lens: str` → `lenses: Tuple[str, ...]` (ordered) + new `rationale: str`.** An org
+  can now carry MULTIPLE LAMP lenses, unioned across the research + refine passes. Tuple over
+  set/list: frozen-dataclass safe (immutable + hashable), JSON→list, and **canonical `LAMP_LENSES`
+  order** makes the cross-pass union order-independent (commutative) and badges deterministic.
+  `merge_orgs` changed from "drop dup" to "fold dup into existing" (UNION lenses, OR `has_alumni`,
+  back-fill blank rationale/identity); `coverage_feedback` counts an org toward every lens it
+  carries; `parse_orgs` reads the `lenses` array AND legacy single `lens` (back-compat). Reversible: yes.
+- **`posting_score` stays BINARY on `active_postings` membership (no finer gradation).** Considered:
+  bump to 3 when `active_postings` co-occurs with other lenses (lens count is a grounded, countable
+  fact). Rejected: P means **hiring activity** specifically (R-1); folding in multi-lens *relevance*
+  would overload P's meaning and conflate signals, and grounding can't quantify hiring intensity.
+  Multi-lens corroboration is surfaced via badges + rationale instead. `core/models.py:Org` and the
+  ranker are untouched. Reversible: yes.
+- **Rationale is model-provided and blank-if-missing — NEVER fabricated.** One grounded sentence
+  from the model, collapsed to one line; left `""` when the model gives none (house rule: leave
+  slots blank rather than invent a placeholder). Purely presentational — never feeds posting/ranking
+  (R-4). Faithful to the model: the model's inline `[N]` grounding markers are **left as-is** (not
+  stripped) — they evidence grounding and stripping would edge into rewriting model output; a later
+  presentation pass can decide to strip if the dangling indices read as noise. Reversible: yes.
+- **Alumni semantics unchanged (kept separate).** PRD S-2(c) phrases the `alumni_employers` lens as
+  "from the uploaded CSV", but the as-built design keeps it **model-tagged from grounded search**,
+  with `has_alumni` as the actual CSV match (surfaced separately). `_resolve_alumni` is NOT touched
+  (stays within the task's stated touchpoints). Deferred: injecting `alumni_employers` onto a CSV
+  match to align the badge with S-2(c). Reversible: yes.
+- **Verified live (Vertex, Gemini 2.5 Pro) — the prior-session lesson applied.** A grounded
+  `Fintech / New York City / Product Management` research call: raw reply used the `lenses` ARRAY
+  shape (not legacy `lens`), **43 orgs**, **16 multi-lens** (`{1:27, 2:14, 3:2}`), **43/43**
+  rationale populated, `grounding_used=True` (web_search_queries present, zero chunks — the
+  structured-JSON grounding shape), `posting_score` correct for every org. NOTE: this single
+  research-only call tagged **0** `alumni_employers` orgs — expected, since filling an empty lens is
+  exactly what `coverage_feedback` → the refine loop does in the full `source_organizations` flow
+  (the harness skipped the loop). Tests +13 → **233 passed, 1 skipped**.

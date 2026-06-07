@@ -65,10 +65,12 @@ class _SourcingFindings:
 
 
 def _org_schema_line() -> str:
-    lenses = "|".join(LAMP_LENSES)
+    lenses = ", ".join(LAMP_LENSES)
     return (
         '{"company": "...", "domain": "...", "sector": "...", "location": "...", '
-        f'"has_alumni": false, "lens": "{lenses}"}}'
+        '"has_alumni": false, '
+        f'"lenses": [one or more of: {lenses}], '
+        '"rationale": "one short grounded sentence on why this org is on the list"}'
     )
 
 
@@ -93,11 +95,15 @@ Rules:
 - Ground every company in a real search result. Do NOT fabricate organizations.
 - Match the requested geography and function where possible.
 - Deduplicate by company name.
+- Tag each org with ALL applicable lenses (an org may belong to several — e.g. a dream peer
+  that is also actively hiring → ["dream_peers", "active_postings"]).
+- Give a one-line `rationale` grounded in a real search result explaining why the org is on
+  the list. Do NOT fabricate; if you cannot ground a reason, use an empty string.
 
 Respond with ONLY a raw JSON array (no markdown, no prose). Each element:
 {_org_schema_line()}
 Set has_alumni to false unless a search result gives direct evidence — affiliation is
-resolved later. domain may be a best guess if not found.
+resolved later. domain may be a best guess if not found. Leave rationale "" if ungrounded.
 """.strip()
 
 
@@ -121,7 +127,9 @@ FOLLOW-UP SEARCHES:
 ALREADY LISTED (do not repeat these): {have}
 
 Same rules: ground every company in a real result, no fabrication, never scrape
-LinkedIn or Indeed. Respond with ONLY a raw JSON array of NEW organizations, each:
+LinkedIn or Indeed. Tag each org with ALL applicable lenses and give a one-line grounded
+`rationale` (or "" if you cannot ground one). Respond with ONLY a raw JSON array of NEW
+organizations, each:
 {_org_schema_line()}
 """.strip()
 
@@ -240,7 +248,7 @@ def source_organizations(
             lambda: first, evaluate, refine, max_iterations=SOURCING_MAX_ITERATIONS
         )
         # Back-fill the alumni signal from the user's contacts CSV before ranking; the
-        # posting signal is derived per-org from the lens inside to_rank_dict().
+        # posting signal is derived per-org from the lenses inside to_rank_dict().
         orgs = _resolve_alumni(result.findings.orgs)
         met_minimum = len(orgs) >= MIN_SOURCED_ORGS
         if not met_minimum:

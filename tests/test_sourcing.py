@@ -30,22 +30,59 @@ from advocate.core.sourcing import (
 
 def test_parse_orgs_bare_json_array():
     raw = json.dumps(
-        [{"company": "Acme", "domain": "acme.com", "sector": "Aero",
-          "location": "LA", "has_alumni": True, "lens": "dream_peers"}]
+        [{"company": "Acme", "domain": "acme.com", "sector": "Aero", "location": "LA",
+          "has_alumni": True, "lenses": ["dream_peers"], "rationale": "A dream peer."}]
     )
     orgs = parse_orgs(raw)
     assert len(orgs) == 1
     o = orgs[0]
-    assert (o.company, o.domain, o.sector, o.location, o.has_alumni, o.lens) == (
-        "Acme", "acme.com", "Aero", "LA", True, "dream_peers"
+    assert (o.company, o.domain, o.sector, o.location, o.has_alumni) == (
+        "Acme", "acme.com", "Aero", "LA", True
     )
+    assert o.lenses == ("dream_peers",)
+    assert o.rationale == "A dream peer."
 
 
 def test_parse_orgs_strips_json_code_fences():
-    raw = '```json\n[{"company": "Acme", "lens": "trends"}]\n```'
+    raw = '```json\n[{"company": "Acme", "lenses": ["trends"]}]\n```'
     orgs = parse_orgs(raw)
     assert [o.company for o in orgs] == ["Acme"]
-    assert orgs[0].lens == "trends"
+    assert orgs[0].lenses == ("trends",)
+
+
+def test_parse_orgs_reads_multiple_lenses_in_canonical_order():
+    # An org can carry several lenses; they are deduped and emitted in LAMP order,
+    # NOT the model's input order, so the cross-pass union is order-independent.
+    raw = json.dumps([{"company": "Acme",
+                       "lenses": ["trends", "dream_peers", "trends", "active_postings"]}])
+    assert parse_orgs(raw)[0].lenses == ("dream_peers", "active_postings", "trends")
+
+
+def test_parse_orgs_keeps_valid_drops_unknown_lenses():
+    raw = json.dumps([{"company": "Acme", "lenses": ["dream_peers", "bogus", "trends"]}])
+    assert parse_orgs(raw)[0].lenses == ("dream_peers", "trends")
+
+
+def test_parse_orgs_tolerates_legacy_single_lens_field():
+    # Back-compat: the older single-`lens` string shape still parses into `lenses`.
+    raw = json.dumps([{"company": "Acme", "lens": "trends"}])
+    assert parse_orgs(raw)[0].lenses == ("trends",)
+
+
+def test_parse_orgs_unions_legacy_lens_with_lenses_field():
+    raw = json.dumps([{"company": "Acme", "lens": "trends", "lenses": ["dream_peers"]}])
+    assert parse_orgs(raw)[0].lenses == ("dream_peers", "trends")
+
+
+def test_parse_orgs_reads_and_normalizes_rationale_to_one_line():
+    raw = json.dumps([{"company": "Acme", "rationale": "  Top fintech\n  hiring now  "}])
+    assert parse_orgs(raw)[0].rationale == "Top fintech hiring now"
+
+
+def test_parse_orgs_blank_rationale_when_model_omits_it():
+    # House rule: leave the slot blank rather than fabricate a placeholder.
+    raw = json.dumps([{"company": "Acme", "lenses": ["trends"]}])
+    assert parse_orgs(raw)[0].rationale == ""
 
 
 def test_parse_orgs_extracts_array_from_surrounding_prose():
@@ -70,25 +107,29 @@ def test_parse_orgs_skips_entries_without_a_company():
     assert [o.company for o in parse_orgs(raw)] == ["Real"]
 
 
-def test_parse_orgs_clears_unknown_lens():
-    raw = json.dumps([{"company": "Acme", "lens": "made_up_lens"}])
-    assert parse_orgs(raw)[0].lens == ""
+def test_parse_orgs_drops_when_all_lenses_unknown():
+    raw = json.dumps([{"company": "Acme", "lenses": ["made_up_lens", "also_fake"]}])
+    assert parse_orgs(raw)[0].lenses == ()  # a fabricated lens can't satisfy coverage
 
 
-def test_to_rank_dict_drops_lens_omits_motivation_and_derives_posting():
-    o = SourcedOrg(company="Acme", domain="acme.com", sector="Aero",
-                   location="LA", has_alumni=True, lens="dream_peers")
+def test_to_rank_dict_carries_lenses_rationale_and_derives_posting():
+    o = SourcedOrg(company="Acme", domain="acme.com", sector="Aero", location="LA",
+                   has_alumni=True, lenses=("dream_peers",), rationale="A dream peer.")
     assert o.to_rank_dict() == {
-        "company": "Acme", "domain": "acme.com", "sector": "Aero",
-        "location": "LA", "has_alumni": True, "posting_score": 0,  # non-active lens → 0
+        "company": "Acme", "domain": "acme.com", "sector": "Aero", "location": "LA",
+        "has_alumni": True, "posting_score": 0,  # active_postings not among lenses → 0
+        "lenses": ["dream_peers"], "rationale": "A dream peer.",
     }
 
 
-def test_to_rank_dict_posting_score_from_active_postings_lens():
-    active = SourcedOrg(company="Acme", lens="active_postings")
-    assert active.to_rank_dict()["posting_score"] == POSTING_SCORE_ACTIVE
-    for lens in ("dream_peers", "alumni_employers", "trends", ""):
-        assert SourcedOrg(company="X", lens=lens).to_rank_dict()["posting_score"] == 0
+def test_to_rank_dict_posting_score_from_active_postings_membership():
+    # Membership, not equality: active_postings AMONG several lenses still scores.
+    assert SourcedOrg(company="Acme", lenses=("active_postings",)).to_rank_dict()[
+        "posting_score"] == POSTING_SCORE_ACTIVE
+    multi = SourcedOrg(company="Acme", lenses=("dream_peers", "active_postings", "trends"))
+    assert multi.to_rank_dict()["posting_score"] == POSTING_SCORE_ACTIVE
+    for lenses in (("dream_peers",), ("alumni_employers",), ("trends",), ()):
+        assert SourcedOrg(company="X", lenses=lenses).to_rank_dict()["posting_score"] == 0
 
 
 # --- pure core: resolve_alumni (S-5: alumni from the user's CSV only) -----------
@@ -179,12 +220,53 @@ def test_merge_orgs_drops_blank_company():
     assert [o.company for o in merged] == ["Acme"]
 
 
+def test_merge_orgs_unions_lenses_for_same_company():
+    # The same org found under a different lens in a refine pass enriches, not duplicates.
+    existing = (SourcedOrg(company="Acme", lenses=("dream_peers",)),)
+    new = (SourcedOrg(company="acme", lenses=("active_postings",)),)
+    merged = merge_orgs(existing, new)
+    assert len(merged) == 1
+    assert merged[0].lenses == ("dream_peers", "active_postings")  # canonical order
+
+
+def test_merge_orgs_ors_has_alumni_on_dup():
+    existing = (SourcedOrg(company="Acme", has_alumni=False),)
+    new = (SourcedOrg(company="acme", has_alumni=True),)
+    assert merge_orgs(existing, new)[0].has_alumni is True
+
+
+def test_merge_orgs_backfills_blank_rationale_and_identity_fields():
+    existing = (SourcedOrg(company="Acme"),)  # blank rationale/domain/sector/location
+    new = (SourcedOrg(company="acme", rationale="Now grounded", domain="acme.com",
+                      sector="Aero", location="LA"),)
+    m = merge_orgs(existing, new)[0]
+    assert m.rationale == "Now grounded"
+    assert (m.domain, m.sector, m.location) == ("acme.com", "Aero", "LA")
+
+
+def test_merge_orgs_keeps_existing_nonblank_rationale_first_wins():
+    existing = (SourcedOrg(company="Acme", rationale="First reason"),)
+    new = (SourcedOrg(company="acme", rationale="Second reason"),)
+    assert merge_orgs(existing, new)[0].rationale == "First reason"
+
+
+def test_merge_orgs_unions_lenses_across_duplicate_new_orgs():
+    # Two NEW orgs with the same company also fold together (not just existing-vs-new).
+    merged = merge_orgs(
+        (),
+        (SourcedOrg(company="Acme", lenses=("trends",)),
+         SourcedOrg(company="ACME", lenses=("dream_peers",))),
+    )
+    assert len(merged) == 1
+    assert merged[0].lenses == ("dream_peers", "trends")
+
+
 # --- pure core: coverage_feedback (the injected, pure-code gate) ----------------
 
 
 def _sorgs(n, lenses=LAMP_LENSES, start=0):
     return tuple(
-        SourcedOrg(company=f"Co{start + i}", lens=lenses[(start + i) % len(lenses)])
+        SourcedOrg(company=f"Co{start + i}", lenses=(lenses[(start + i) % len(lenses)],))
         for i in range(n)
     )
 
@@ -209,6 +291,15 @@ def test_coverage_feedback_fails_on_missing_lens_and_targets_only_it():
     assert len(fb.follow_up_queries) == 1
     assert "Fintech" in fb.follow_up_queries[0]
     assert "trends" in fb.comment
+
+
+def test_coverage_feedback_one_multilens_org_covers_all_its_lenses():
+    # A single org carrying all four lenses satisfies all-lenses coverage by itself.
+    orgs = (SourcedOrg(company="Co0", lenses=LAMP_LENSES),) + tuple(
+        SourcedOrg(company=f"Co{i}") for i in range(1, 40)  # the rest carry no lens
+    )
+    fb = coverage_feedback(orgs, "Fintech", "NYC", "PM", 40)
+    assert fb.grade == "pass"
 
 
 # --- agent wiring: source_organizations (fake genai client) --------------------
@@ -290,7 +381,8 @@ def _orgs_json(n, lenses=LAMP_LENSES, start=0):
     return json.dumps([
         {"company": f"Co{start + i}", "domain": f"co{start + i}.com",
          "sector": "Tech", "location": "NYC", "has_alumni": False,
-         "lens": lenses[(start + i) % len(lenses)]}
+         "lenses": [lenses[(start + i) % len(lenses)]],
+         "rationale": f"Grounded reason {start + i}"}
         for i in range(n)
     ])
 
@@ -309,9 +401,10 @@ def test_happy_path_returns_grounded_orgs_meeting_minimum(monkeypatch):
     assert result["met_minimum"] is True
     assert result["count"] == 40
     assert len(result["organizations"]) == 40
-    # downstream contract: rank_companies dict shape, no lens / motivation leaked
+    # downstream contract: rank_companies dict shape + S-3 presentation fields, no motivation
     assert set(result["organizations"][0]) == {
-        "company", "domain", "sector", "location", "has_alumni", "posting_score"
+        "company", "domain", "sector", "location", "has_alumni", "posting_score",
+        "lenses", "rationale",
     }
 
 
@@ -336,6 +429,33 @@ def test_refine_runs_to_clear_a_lens_gap_and_merges_new_orgs(monkeypatch):
     assert result["met_minimum"] is True  # 10 + 35 = 45
     names = {o["company"] for o in result["organizations"]}
     assert "Co0" in names and "Co100" in names  # refine's orgs merged in
+
+
+def test_refine_unions_lenses_for_same_company_end_to_end(monkeypatch):
+    """A refine pass that re-surfaces an EXISTING company under a NEW lens unions the lenses
+    on the final record (not a duplicate row), and posting_score then reflects membership."""
+    gc = {"n": 0}
+    three = ("dream_peers", "alumni_employers", "trends")  # first pass lacks active_postings
+
+    def router(model, contents, config):
+        assert _is_grounded(config)
+        gc["n"] += 1
+        if gc["n"] == 1:
+            return _resp(_orgs_json(39, three, start=0), metadatas=[_meta()])
+        # refine re-surfaces Co0 under active_postings (+ one new org to meet the count).
+        refined = json.dumps([
+            {"company": "Co0", "lenses": ["active_postings"], "rationale": "Now hiring"},
+            {"company": "Co100", "lenses": ["active_postings"], "rationale": "new"},
+        ])
+        return _resp(refined, metadatas=[_meta("https://b.com", "B", "b.com")])
+
+    _install(monkeypatch, router)
+    result = source_organizations("Fintech", "NYC", "PM")
+    by_company = {o["company"]: o for o in result["organizations"]}
+    assert "Co100" in by_company  # genuinely new org from the refine pass merged in
+    # Co0 started as dream_peers; refine added active_postings → unioned, posting now scores.
+    assert set(by_company["Co0"]["lenses"]) == {"dream_peers", "active_postings"}
+    assert by_company["Co0"]["posting_score"] == POSTING_SCORE_ACTIVE
 
 
 def test_grounded_via_web_search_queries_without_chunks(monkeypatch):

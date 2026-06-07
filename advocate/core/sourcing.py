@@ -13,6 +13,7 @@ module fully unit-testable without a cloud.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, replace
 from typing import AbstractSet, Dict, Iterable, List, Mapping, Tuple
 
@@ -23,8 +24,8 @@ from advocate.core.research import Feedback
 # while folding in the user's motivation scores (see signals_index / reconcile_signals).
 CANDIDATE_SIGNALS_KEY = "candidate_signals"
 
-# Dalton's four LAMP lenses. The model tags each org with one; coverage_feedback
-# checks all four are represented before grading "pass".
+# Dalton's four LAMP lenses. The model tags each org with one OR MORE; coverage_feedback
+# checks all four are represented (an org counts toward every lens it carries) before "pass".
 LAMP_LENSES: Tuple[str, ...] = (
     "dream_peers",
     "alumni_employers",
@@ -32,11 +33,12 @@ LAMP_LENSES: Tuple[str, ...] = (
     "trends",
 )
 
-# Posting Activity (the "P" in the M→P→A ranker, scale 1–3 per PRD R-1). An org
-# surfaced via the active_postings lens (PRD S-2(d): "companies with active relevant
-# postings / growth signals") carries a grounded posting signal; we can't quantify
-# intensity from grounding, so it's a flat mid-high score. Every other lens has NO
-# hiring evidence → 0 (no signal, mirroring how Alumni defaults to 0 — PRD Edge Case 2).
+# Posting Activity (the "P" in the M→P→A ranker, scale 1–3 per PRD R-1). An org whose
+# lenses INCLUDE active_postings (PRD S-2(d): "companies with active relevant postings /
+# growth signals") carries a grounded posting signal; we can't quantify intensity from
+# grounding, so it's a flat mid-high score (binary on membership — multi-lens corroboration
+# is surfaced via badges/rationale, never folded into P, which means hiring activity only).
+# An org without that lens has NO hiring evidence → 0 (mirrors Alumni's 0 — PRD Edge Case 2).
 POSTING_SCORE_ACTIVE = 2
 
 # Human-readable gap descriptions per lens, used to template follow-up search queries
@@ -51,11 +53,15 @@ _LENS_QUERY_HINT = {
 
 @dataclass(frozen=True)
 class SourcedOrg:
-    """One sourced organization tagged with the LAMP lens that surfaced it.
+    """One sourced organization tagged with the LAMP lens(es) that surfaced it (PRD S-3).
 
-    `lens` is sourcing-only metadata used by `coverage_feedback`; it is dropped at the
-    tool boundary by `to_rank_dict` so the canonical `Org` / `rank_companies` contract
-    is unchanged. `motivation` is NOT set here — the user supplies it after sourcing.
+    `lenses` is sourcing/presentation metadata: an org can carry MULTIPLE lenses (unioned
+    across the research + refine passes), kept in canonical `LAMP_LENSES` order. It drives
+    `coverage_feedback` (an org counts toward every lens it carries) and the
+    `active_postings`-derived posting score, and is surfaced to the user as source-lens
+    badges. `rationale` is the model's grounded one-line reason the org was sourced (PRD
+    S-3) — purely presentational, never feeds ranking (R-4); blank when the model gives none
+    (never fabricated). `motivation` is NOT set here — the user supplies it after sourcing.
     """
 
     company: str
@@ -63,13 +69,18 @@ class SourcedOrg:
     sector: str = ""
     location: str = ""
     has_alumni: bool = False
-    lens: str = ""
+    lenses: Tuple[str, ...] = ()
+    rationale: str = ""
 
     def to_rank_dict(self) -> dict:
-        """The `rank_companies` dict shape (no lens, no motivation — the user scores later).
+        """The dict handed to `rank_companies`, plus the S-3 presentation fields.
 
-        `posting_score` is derived from the lens (active_postings → POSTING_SCORE_ACTIVE,
-        else 0); `has_alumni` carries whatever `resolve_alumni` set from the user's CSV.
+        `posting_score` is derived from the lenses (`POSTING_SCORE_ACTIVE` iff
+        `active_postings` is AMONG them, else 0); `has_alumni` carries whatever
+        `resolve_alumni` set from the user's CSV. `lenses` (source-lens badges) and the
+        one-line `rationale` are surfaced to the user; `rank_companies` ignores these two
+        extra keys, so the M->P->A order is unaffected (R-4). `motivation` is NOT included —
+        the user scores it later.
         """
         return {
             "company": self.company,
@@ -77,8 +88,27 @@ class SourcedOrg:
             "sector": self.sector,
             "location": self.location,
             "has_alumni": self.has_alumni,
-            "posting_score": POSTING_SCORE_ACTIVE if self.lens == "active_postings" else 0,
+            "posting_score": POSTING_SCORE_ACTIVE if "active_postings" in self.lenses else 0,
+            "lenses": list(self.lenses),
+            "rationale": self.rationale,
         }
+
+
+def _one_line(text: str) -> str:
+    """Collapse all whitespace runs (incl. newlines) to single spaces and trim — one line."""
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _canonical_lenses(raw_lenses: Iterable[str]) -> Tuple[str, ...]:
+    """Normalize lens strings to canonical `LAMP_LENSES` order, deduped, unknowns dropped.
+
+    Lower/strip each candidate and keep only the four valid LAMP lenses, emitted in
+    `LAMP_LENSES` order (NOT input order) so a UNION across passes is order-independent and
+    badges render deterministically. A fabricated/unknown lens is silently dropped — it can
+    never satisfy the coverage gate.
+    """
+    seen = {str(x).strip().lower() for x in raw_lenses if str(x).strip()}
+    return tuple(lens for lens in LAMP_LENSES if lens in seen)
 
 
 def _loads_list(raw: str | None) -> list:
@@ -113,8 +143,11 @@ def _loads_list(raw: str | None) -> list:
 def parse_orgs(raw: str | None) -> Tuple[SourcedOrg, ...]:
     """Parse a model's JSON org list into `SourcedOrg` records, tolerantly.
 
-    Entries without a company name are skipped; an unrecognized `lens` is cleared to
-    "" so a fabricated lens can never satisfy the coverage gate.
+    Entries without a company name are skipped. Lenses are read from the `lenses` array
+    (the current shape) AND the legacy single `lens` string (back-compat), unioned,
+    canonicalized to `LAMP_LENSES` order, with unknown lenses dropped so a fabricated lens
+    can never satisfy the coverage gate. `rationale` is the model's one-line reason,
+    collapsed to a single line and left "" when omitted (never fabricated — PRD S-3).
     """
     orgs: List[SourcedOrg] = []
     for item in _loads_list(raw):
@@ -123,9 +156,15 @@ def parse_orgs(raw: str | None) -> Tuple[SourcedOrg, ...]:
         company = str(item.get("company", "")).strip()
         if not company:
             continue
-        lens = str(item.get("lens", "")).strip().lower()
-        if lens not in LAMP_LENSES:
-            lens = ""
+        raw_lenses: List[str] = []
+        lenses_field = item.get("lenses")
+        if isinstance(lenses_field, list):
+            raw_lenses.extend(str(x) for x in lenses_field)
+        elif isinstance(lenses_field, str):  # tolerate a single string in `lenses`
+            raw_lenses.append(lenses_field)
+        legacy = item.get("lens")  # back-compat: the older single-lens string shape
+        if isinstance(legacy, str):
+            raw_lenses.append(legacy)
         orgs.append(
             SourcedOrg(
                 company=company,
@@ -133,7 +172,8 @@ def parse_orgs(raw: str | None) -> Tuple[SourcedOrg, ...]:
                 sector=str(item.get("sector", "")).strip(),
                 location=str(item.get("location", "")).strip(),
                 has_alumni=bool(item.get("has_alumni", False)),
-                lens=lens,
+                lenses=_canonical_lenses(raw_lenses),
+                rationale=_one_line(str(item.get("rationale", ""))),
             )
         )
     return tuple(orgs)
@@ -142,19 +182,40 @@ def parse_orgs(raw: str | None) -> Tuple[SourcedOrg, ...]:
 def merge_orgs(
     existing: Iterable[SourcedOrg], new: Iterable[SourcedOrg]
 ) -> Tuple[SourcedOrg, ...]:
-    """Dedupe by case-insensitive company name, keeping existing orgs first.
+    """Dedupe by case-insensitive company name, folding a dup into the existing record.
 
-    A refine pass merges its orgs AFTER the ones already collected; a company already
-    present (case-insensitively) is not added again, so the count grows only by
-    genuinely new organizations. Blank names are dropped.
+    A refine pass merges its orgs AFTER the ones already collected. A company already
+    present (case-insensitively, whether from `existing` or earlier in `new`) is NOT added
+    as a new row; instead its `lenses` are UNIONed with the dup's (canonical order),
+    `has_alumni` is OR-ed, and a blank `rationale` / identity field (domain/sector/location)
+    is back-filled from the dup (first non-blank wins). So the count grows only by genuinely
+    new organizations, but a dup found under a different lens enriches — never overwrites —
+    the record. Blank names are dropped. Pure: returns new records, inputs untouched.
     """
     merged: List[SourcedOrg] = list(existing)
-    seen = {o.company.strip().casefold() for o in merged if o.company.strip()}
+    index: Dict[str, int] = {}
+    for i, o in enumerate(merged):
+        key = o.company.strip().casefold()
+        if key:
+            index.setdefault(key, i)
     for o in new:
         key = o.company.strip().casefold()
-        if key and key not in seen:
+        if not key:
+            continue
+        if key in index:
+            cur = merged[index[key]]
+            merged[index[key]] = replace(
+                cur,
+                lenses=_canonical_lenses(cur.lenses + o.lenses),
+                has_alumni=cur.has_alumni or o.has_alumni,
+                rationale=cur.rationale or o.rationale,
+                domain=cur.domain or o.domain,
+                sector=cur.sector or o.sector,
+                location=cur.location or o.location,
+            )
+        else:
+            index[key] = len(merged)
             merged.append(o)
-            seen.add(key)
     return tuple(merged)
 
 
@@ -175,7 +236,7 @@ def coverage_feedback(
     the loop refines on these queries until the gate passes or the budget is spent.
     """
     orgs = tuple(orgs)
-    present = {o.lens for o in orgs if o.lens}
+    present = {lens for o in orgs for lens in o.lenses}  # an org counts for ALL its lenses
     missing = [lens for lens in lenses if lens not in present]
     short = len(orgs) < min_orgs
     if not short and not missing:

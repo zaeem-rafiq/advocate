@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-06-07 — PRD S-3: multi-lens source tags + per-org grounded rationale
+
+Each sourced org carried a **single** `lens` and no rationale, so an org that was both a dream
+peer *and* actively hiring showed one badge, and the user never saw *why* an org was sourced.
+PRD **S-3** requires "source **lens(es)**" (plural) + a one-line rationale, surfaced to the user.
+
+- **`core/sourcing.py`:** `SourcedOrg.lens: str` → `lenses: Tuple[str, ...]` (canonical
+  `LAMP_LENSES` order) + new `rationale: str`.
+  - `parse_orgs` reads the `lenses` array AND the legacy single `lens` (back-compat), unioned via
+    new `_canonical_lenses` (dedupe, drop unknowns, canonical order); `rationale` collapsed to one
+    line via `_one_line`, left `""` when the model omits it (**never fabricated**).
+  - `merge_orgs` now **folds a dup into the existing record** (UNION lenses, OR `has_alumni`,
+    back-fill blank `rationale`/identity) instead of dropping it — a dup found under a different
+    lens enriches the record. Count still grows only by genuinely new orgs.
+  - `coverage_feedback`: an org counts toward **every** lens it carries.
+  - `to_rank_dict`: `posting_score = POSTING_SCORE_ACTIVE` iff `active_postings` is **among** the
+    lenses (binary on membership — multi-lens corroboration is *not* folded into P, which stays
+    "hiring activity only", R-1/R-4); now also carries `lenses` + `rationale` (presentation fields
+    `rank_companies` ignores).
+- **`agents/sourcing.py`:** research/refine prompts instruct the model to tag **all** applicable
+  lenses and give a one-line grounded rationale (or `""`); schema line updated.
+- **`agents/orchestrator.py`:** steps 3 & 5 present source-lens badge(s) + rationale (carried from
+  the sourced list by company name — ranking output stays pure).
+
+**Decisions (confirmed):** lenses = ordered tuple; posting stays binary on `active_postings`;
+rationale model-provided & blank-if-missing (no placeholder); alumni semantics unchanged
+(`alumni_employers` lens stays model-tagged, `has_alumni` stays the CSV match).
+
+**Verified live (Vertex, Gemini 2.5 Pro):** a grounded `Fintech / New York City / Product
+Management` research call returned **43 orgs**, the raw reply used the `lenses` **array** shape,
+**16/43** orgs were multi-lens (`{1:27, 2:14, 3:2}`), **43/43** had a grounded rationale,
+`grounding_used=True`, and `posting_score` derivation was correct for every org. Tests +13.
+**233 passed, 1 skipped.**
+
 ## 2026-06-07 — Harden motivation→rank merge: authoritative ranking signals in session state
 
 The orchestrator LLM re-serializes the sourced org list to fold in the user's motivation scores,
