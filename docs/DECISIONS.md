@@ -125,3 +125,15 @@ Format: date · decision · rationale · reversible?
      pins the §7 worked-example fixture so the ranker can't regress to an additive sum). **109
      pure-core tests pass** (`uv run --no-project --python 3.12 --with pytest`). Gate wiring into
      drafting/UI is issue #12; the 6-screen web UI is issue #13. Reversible: yes.
+
+- **Migrated to Google ADK 2.x (`google-adk` 2.2.0).** Pinned `>=2.2.0,<3.0.0` (was the
+  unbounded `>=0.3.0`) and bumped `requires-python` to `>=3.11` — ADK 2.0 requires 3.11+
+  (updates the earlier "Python 3.12" note; venvs resolve 3.11+: 3.12 in the main checkout,
+  3.13 in the worktree). No application code changed: the `LlmAgent` / tools / `get_fast_api_app`
+  surface is stable across 1.x→2.x. Verified on the **merged** tree (incl. the new gate +
+  ranking-spec tests): **114 passed / 1 skipped**, app serves (`/list-apps` → `advocate_app`,
+  49 routes). The 2.0 "don't share persistent storage with 1.x" warning does NOT apply here —
+  ADK sessions are in-memory (no `session_service_uri`) and Firestore holds only app-domain state
+  behind `PipelineRepository`, which ADK never touches. Reversible: yes (re-pin to `<2.0.0`).
+  NOTE: prod redeploy on 2.x not yet done — the live Cloud Run revision still runs the
+  pre-migration build.
