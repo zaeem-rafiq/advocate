@@ -36,6 +36,8 @@ Format: date · decision · rationale · reversible?
   per slice, but publishing a public GitHub repo is outward-facing (a Phase-4 DoD item).
   Proceeding with local `slice/N-*` branches; will create + push the public repo at the
   packaging gate (#9) with explicit approval. Reversible: yes.
+  *(Superseded 2026-06-07: a **private** remote `github.com/zaeem-rafiq/advocate` was later added and
+  `main` is pushed to it — the repo is PRIVATE, not public. See the OPEN-items reconciliation below.)*
 
 - **`orchestrator-data/` gitignored** — dispatch/Linear launchd metadata, not product code.
 
@@ -92,8 +94,11 @@ Format: date · decision · rationale · reversible?
   - Docs written: ARCHITECTURE, DATA_SOURCES, DEMO_SCRIPT, SUBMISSION; README usage; CHANGELOG.
 
 - **OPEN — outward-facing items (need explicit approval).**
-  1. **Public GitHub repo publish** — no remote configured; publishing is irreversible/outward.
-     Awaiting go-ahead + account/visibility choice.
+  1. **Public GitHub repo publish** — RECONCILED 2026-06-07: a **PRIVATE** remote exists
+     (`github.com/zaeem-rafiq/advocate`, created 2026-06-06) and `main` is pushed to it — the code
+     is **NOT public**. The still-open, approval-gated item is **PUBLIC** publication (flipping the
+     repo to public is the outward-facing step awaiting go-ahead). Visibility verified via
+     `gh repo view` (`isPrivate: true`).
   2. **Demo video** — manual recording; script is in docs/DEMO_SCRIPT.md.
   3. **Public (unauthenticated) Cloud Run access for judges** — currently authenticated-only;
      making it public was deferred (classifier-gated) and is a separate explicit decision.
