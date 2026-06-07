@@ -143,10 +143,18 @@ Format: date · decision · rationale · reversible?
   smoke passed: authenticated `GET /list-apps → 200 ["advocate_app"]`. Added a `.gcloudignore`
   (`#!include:.gitignore` + `.claude/ .git/ docs/ tests/ …`) so `--source` no longer uploads the 123M
   `.claude/` worktree tree / venvs to Cloud Build.
-- **OPEN — Cloud Trace export failing (`PERMISSION_DENIED`), non-fatal.** Logs show
-  `Permission 'cloudtrace.traces.patch' denied on resource '//logging.googleapis.com/projects/agenticprd'`
-  despite the Cloud Trace API being enabled AND `advocate-run` holding `roles/cloudtrace.agent`. So it
-  is NOT a permission dropped by the migration — IAM/API are correctly configured; the odd
-  `logging.googleapis.com` resource container points to an attribution/quota-project issue, and it most
-  likely predates the migration on the 1.x revision. App is unaffected (serves normally); only
-  `trace_to_cloud` observability is degraded. To investigate separately.
+- **RESOLVED — the Cloud Trace `PERMISSION_DENIED` was the pre-migration revision only.** The
+  `Permission 'cloudtrace.traces.patch' denied` errors were all logged by the OLD revision
+  `advocate-00012-n7n` during agent activity (verified via `gcloud logging read` filtered by
+  revision). On the live 2.x revision `advocate-00013-vp6`, a real agent `/run` produced **zero**
+  trace-export errors (verified; logs confirmed flowing). The export path is identical across versions
+  (`get_fast_api_app(trace_to_cloud=True)`, `otel_to_cloud` default `False` → the `CloudTraceSpanExporter`
+  branch at `fast_api.py:587` runs), so the difference is environmental, not code: the slice-9
+  `roles/cloudtrace.agent` grant was evidently not yet effective for `00012`'s runtime credentials, and
+  the fresh `00013` redeploy picked up the now-effective role — i.e. the ADK 2.x migration redeploy
+  incidentally fixed it. IAM/API confirmed correct (role includes `cloudtrace.traces.patch`,
+  unconditional; no deny policy; API enabled). Caveat: positive span listing via the legacy
+  `listTraces` v1 API returned 0 even after an indexing wait (a known v1 quirk) — eyeball the Cloud
+  Trace console (Trace Explorer) for `agenticprd` if you want visual confirmation of spans. (Correcting
+  the record: my earlier "the deployed 2.x build is failing trace export" was a misattribution of the
+  old revision's drain-window logs surfaced by `logs read` on an idle service.)
