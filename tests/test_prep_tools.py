@@ -80,6 +80,7 @@ def test_happy_path_returns_grounded_cited_brief_and_five_questions(monkeypatch)
     result = prepare_informational("Acme", "Propulsion Engineer")
 
     assert result["grounded"] is True
+    assert result["depth"] == "deep"  # critic passed → research converged
     assert result["company"] == "Acme"
     assert "[Acme News](https://acme.com/news)" in result["brief"]  # cite tag → link
     assert "<cite" not in result["brief"]
@@ -129,6 +130,9 @@ def test_thin_sources_fall_back_honestly_without_fabricating(monkeypatch):
     result = prepare_informational("ObscureCo", "Role")
 
     assert result["grounded"] is False
+    assert result["depth"] == "shallow"  # fallback (no grounded research) → shallow
+    # fallback dict carries the same keys as the success path (contract stability)
+    assert set(result) == {"company", "brief", "questions", "grounded", "depth"}
     assert result["questions"] == fallback_questions()
     assert result["company"] == "ObscureCo"
     assert "ObscureCo" in result["brief"]
@@ -183,7 +187,7 @@ def test_return_contract_keys_are_exactly_stable(monkeypatch):
 
     _install(monkeypatch, router)
     result = prepare_informational("Acme", "Role")
-    assert set(result) == {"company", "brief", "questions", "grounded"}
+    assert set(result) == {"company", "brief", "questions", "grounded", "depth"}
 
 
 # --- honesty guard: never ship an evidence-stripped brief as grounded (review C1) ----
@@ -291,6 +295,7 @@ def test_grounded_true_even_when_critic_never_passes(monkeypatch, caplog):
     with caplog.at_level(logging.WARNING):
         result = prepare_informational("Acme", "Role")
     assert result["grounded"] is True
+    assert result["depth"] == "shallow"  # critic never passed → shallow (additive; grounded stays True)
     assert "[Acme News](https://acme.com/news)" in result["brief"]
     assert any("grade=fail" in rec.message for rec in caplog.records)
 

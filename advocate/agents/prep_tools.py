@@ -161,7 +161,11 @@ def _parse_feedback(raw: str | None) -> Feedback:
 
 
 def _fallback(company: str) -> dict:
-    """The honest grounded=False result for thin sources or any backend/LLM fault."""
+    """The honest grounded=False result for thin sources or any backend/LLM fault.
+
+    `depth` is "shallow" here — no grounded research was retrieved, the thinnest case — so the
+    field is present on the fallback too (contract stability) and the user gets an honest signal.
+    """
     return {
         "company": company,
         "brief": (
@@ -170,6 +174,7 @@ def _fallback(company: str) -> dict:
         ),
         "questions": fallback_questions(),
         "grounded": False,
+        "depth": "shallow",
     }
 
 
@@ -181,10 +186,13 @@ def prepare_informational(company: str, role: str) -> dict:
         role: the target role/function the seeker is exploring.
 
     Returns:
-        {"company", "brief", "questions": {category: question}, "grounded": bool}. The
-        brief carries inline Markdown citations (weakly-grounded ones flagged). For
-        thin/obscure companies or any backend fault, "grounded" is False and questions
-        fall back to a generic TIARA set; company-specific facts are never fabricated.
+        {"company", "brief", "questions": {category: question}, "grounded": bool,
+        "depth": "deep"|"shallow"}. The brief carries inline Markdown citations
+        (weakly-grounded ones flagged). For thin/obscure companies or any backend fault,
+        "grounded" is False and questions fall back to a generic TIARA set; company-specific
+        facts are never fabricated. `depth` is an ADDITIVE signal — "shallow" when the research
+        loop didn't converge (critic never reached "pass") or on the fallback, "deep" otherwise.
+        It does NOT overload "grounded" ("backed by real cited sources", independent of depth).
     """
     try:
         from google import genai
@@ -240,9 +248,13 @@ def prepare_informational(company: str, role: str) -> dict:
             lambda: first, evaluate, refine, max_iterations=RESEARCH_MAX_ITERATIONS
         )
         findings = result.findings
+        depth = "deep"
         if result.feedback and result.feedback.grade == "fail":
             # The brief is still grounded in real, cited sources, so it ships (grounded=True);
-            # but a critic that never reached "pass" within the budget is worth auditing.
+            # but a critic that never reached "pass" within the budget means thin research —
+            # flag depth="shallow" so the user gets an honest caveat (additive; grounded stays
+            # True), and log the un-passed verdict for audit.
+            depth = "shallow"
             _LOG.warning(
                 "shipping brief for %r despite critic grade=fail: %s",
                 company,
@@ -288,7 +300,8 @@ def prepare_informational(company: str, role: str) -> dict:
             _LOG.warning("compose produced an empty/unciteable brief for %r; falling back", company)
             return _fallback(company)
 
-        return {"company": company, "brief": brief, "questions": questions, "grounded": True}
+        return {"company": company, "brief": brief, "questions": questions,
+                "grounded": True, "depth": depth}
     except Exception:  # noqa: BLE001 — own the error: honest grounded=False, never a crash
         _LOG.exception("prepare_informational failed for company=%r role=%r", company, role)
         return _fallback(company)
