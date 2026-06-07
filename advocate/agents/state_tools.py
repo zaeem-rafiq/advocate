@@ -11,6 +11,7 @@ from typing import List
 from google.adk.tools.tool_context import ToolContext
 
 from advocate.agents.errors import tool_safe
+from advocate.agents.session_state import recover_signals
 from advocate.core.models import OrgStatus
 from advocate.core.state import OrgRecord
 from advocate.data.repository_factory import get_repository
@@ -45,6 +46,7 @@ def save_pipeline(companies: List[dict], tool_context: ToolContext) -> dict:
     Returns:
         {"saved": <count>} on success.
     """
+    companies = recover_signals(tool_context, companies)
     repo = get_repository()
     user = _user_id(tool_context)
     for c in companies:

@@ -14,9 +14,14 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, replace
-from typing import AbstractSet, Iterable, List, Tuple
+from typing import AbstractSet, Dict, Iterable, List, Mapping, Tuple
 
 from advocate.core.research import Feedback
+
+# Session-state key under which the candidate list's authoritative ranking signals are
+# stashed so the rank/persist steps can recover them even if the LLM drops the fields
+# while folding in the user's motivation scores (see signals_index / reconcile_signals).
+CANDIDATE_SIGNALS_KEY = "candidate_signals"
 
 # Dalton's four LAMP lenses. The model tags each org with one; coverage_feedback
 # checks all four are represented before grading "pass".
@@ -209,3 +214,45 @@ def resolve_alumni(
         matched = name in alum_keys or (bool(domain) and domain in alum_keys)
         out.append(replace(o, has_alumni=True) if matched else o)
     return tuple(out)
+
+
+def signals_index(companies: Iterable[Mapping]) -> Dict[str, dict]:
+    """Index a candidate list by casefolded company → its authoritative ranking signals.
+
+    Keeps only `posting_score`/`has_alumni` (identity + motivation come from the user via
+    the LLM; domain/sector/location don't affect ranking). Blank company names are
+    skipped. Coerces with the same defaults the rank/persist tools use, so a round-tripped
+    value matches what those tools would have produced. Producers stash this in session
+    state for `reconcile_signals` to recover after motivation scoring.
+    """
+    index: Dict[str, dict] = {}
+    for c in companies:
+        name = str(c.get("company", "")).strip().casefold()
+        if not name:
+            continue
+        index[name] = {
+            "posting_score": int(c.get("posting_score", 0) or 0),
+            "has_alumni": bool(c.get("has_alumni", False)),
+        }
+    return index
+
+
+def reconcile_signals(
+    companies: Iterable[Mapping], authoritative: Mapping[str, Mapping]
+) -> List[dict]:
+    """Restore authoritative `posting_score`/`has_alumni` onto user-scored company dicts.
+
+    For each input, when its casefolded company is in `authoritative`, override those two
+    signals from there; otherwise keep the input's own values (empty state or a path that
+    never populated it → unchanged behavior). `motivation` and every other field pass
+    through. Returns NEW dicts — inputs are never mutated.
+    """
+    out: List[dict] = []
+    for c in companies:
+        merged = dict(c)
+        signals = authoritative.get(str(c.get("company", "")).strip().casefold())
+        if signals:
+            merged["posting_score"] = signals["posting_score"]
+            merged["has_alumni"] = signals["has_alumni"]
+        out.append(merged)
+    return out

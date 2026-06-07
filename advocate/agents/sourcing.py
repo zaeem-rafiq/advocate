@@ -25,6 +25,8 @@ import logging
 from dataclasses import dataclass
 from typing import Tuple
 
+from google.adk.tools.tool_context import ToolContext
+
 from advocate.agents.config import (
     CONTACTS_CSV,
     LOCATION,
@@ -34,6 +36,7 @@ from advocate.agents.config import (
     SOURCING_MODEL,
     USE_VERTEX,
 )
+from advocate.agents.session_state import stash_candidate_signals
 from advocate.core.citations import grounding_used
 from advocate.core.research import Feedback, research_until_sufficient
 from advocate.core.sourcing import (
@@ -150,7 +153,9 @@ def _resolve_alumni(orgs: tuple[SourcedOrg, ...]) -> tuple[SourcedOrg, ...]:
     return resolve_alumni(orgs, alum_keys)
 
 
-def source_organizations(industry: str, geography: str, function: str) -> dict:
+def source_organizations(
+    industry: str, geography: str, function: str, tool_context: ToolContext = None
+) -> dict:
     """Source distinct LAMP target organizations via grounded, iterative search.
 
     Runs a grounded research pass, then a pure-code coverage gate (>= the FR-1 minimum
@@ -245,8 +250,12 @@ def source_organizations(industry: str, geography: str, function: str) -> dict:
                 "sourced %d/%d orgs for industry=%r geography=%r function=%r within budget",
                 len(orgs), MIN_SOURCED_ORGS, industry, geography, function,
             )
+        org_dicts = [o.to_rank_dict() for o in orgs]
+        # Stash the authoritative ranking signals so rank/persist can recover them even if
+        # the LLM drops posting_score/has_alumni while folding in the user's motivation.
+        stash_candidate_signals(tool_context, org_dicts)
         return {
-            "organizations": [o.to_rank_dict() for o in orgs],
+            "organizations": org_dicts,
             "count": len(orgs),
             "grounded": result.findings.grounded,
             "met_minimum": met_minimum,

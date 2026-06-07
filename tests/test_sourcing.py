@@ -13,13 +13,16 @@ import json
 import pytest
 
 from advocate.core.sourcing import (
+    CANDIDATE_SIGNALS_KEY,
     LAMP_LENSES,
     POSTING_SCORE_ACTIVE,
     SourcedOrg,
     coverage_feedback,
     merge_orgs,
     parse_orgs,
+    reconcile_signals,
     resolve_alumni,
+    signals_index,
 )
 
 # --- pure core: parse_orgs ------------------------------------------------------
@@ -118,6 +121,49 @@ def test_resolve_alumni_never_flips_true_to_false():
     assert out[0].has_alumni is True
 
 
+# --- pure core: signals_index + reconcile_signals (authoritative-state merge) ---
+
+
+def test_signals_index_maps_casefold_company_to_signals():
+    idx = signals_index([
+        {"company": "Ramp", "posting_score": 2, "has_alumni": True},
+        {"company": "Alloy", "posting_score": 0, "has_alumni": False},
+    ])
+    assert idx == {
+        "ramp": {"posting_score": 2, "has_alumni": True},
+        "alloy": {"posting_score": 0, "has_alumni": False},
+    }
+
+
+def test_signals_index_skips_blank_company_and_coerces_defaults():
+    idx = signals_index([{"company": "  "}, {"company": "X"}])
+    assert set(idx) == {"x"}
+    assert idx["x"] == {"posting_score": 0, "has_alumni": False}  # missing → coerced
+
+
+def test_reconcile_signals_overrides_from_authoritative_on_match():
+    # LLM dropped the signals (defaulted) but state has the real values.
+    companies = [{"company": "Ramp", "motivation": 5, "posting_score": 0, "has_alumni": False}]
+    authoritative = {"ramp": {"posting_score": 2, "has_alumni": True}}
+    out = reconcile_signals(companies, authoritative)
+    assert out[0]["posting_score"] == 2
+    assert out[0]["has_alumni"] is True
+    assert out[0]["motivation"] == 5  # motivation (and identity) preserved from the LLM
+
+
+def test_reconcile_signals_passthrough_when_company_not_in_state():
+    companies = [{"company": "Seedco", "motivation": 4, "posting_score": 3, "has_alumni": True}]
+    out = reconcile_signals(companies, {})  # empty state → keep the input's own values
+    assert out[0]["posting_score"] == 3
+    assert out[0]["has_alumni"] is True
+
+
+def test_reconcile_signals_is_immutable():
+    companies = [{"company": "Ramp", "posting_score": 0, "has_alumni": False}]
+    reconcile_signals(companies, {"ramp": {"posting_score": 2, "has_alumni": True}})
+    assert companies[0]["posting_score"] == 0  # input dict untouched
+
+
 # --- pure core: merge_orgs -----------------------------------------------------
 
 
@@ -169,8 +215,11 @@ def test_coverage_feedback_fails_on_missing_lens_and_targets_only_it():
 
 genai_mod = pytest.importorskip("google.genai")
 
+from advocate.agents.session_state import recover_signals, stash_candidate_signals  # noqa: E402
 from advocate.agents.sourcing import source_organizations  # noqa: E402
+from advocate.agents.tools import rank_companies  # noqa: E402
 from advocate.core.models import Contact  # noqa: E402
+from advocate.core.sourcing import CANDIDATE_SIGNALS_KEY  # noqa: E402
 from types import SimpleNamespace as NS  # noqa: E402
 
 
@@ -180,6 +229,17 @@ def _alum_contact(company, domain="", is_alum=True):
         function="Product", seniority="Director", grad_year=2020, location="NYC",
         email="maya@example.com", linkedin_handle="in/maya", is_alum=is_alum,
     )
+
+
+class _FakeCtx:
+    """Minimal ADK ToolContext stand-in: a `.state` dict (+ a session for _user_id)."""
+
+    def __init__(self, user="u1"):
+        self.state = {}
+        self._user = user
+
+    def get_invocation_context(self):
+        return NS(session=NS(user_id=self._user))
 
 
 def _chunk(uri, title, domain):
@@ -391,6 +451,81 @@ def test_non_alum_contacts_do_not_set_flag(monkeypatch):
     )
     result = source_organizations("Fintech", "NYC", "PM")
     assert all(o["has_alumni"] is False for o in result["organizations"])
+
+
+# --- session-state hardening: signals survive the motivation-scoring re-serialization ---
+
+
+def test_stash_and_recover_roundtrip_via_helpers():
+    """The agent helpers stash signals and recover them onto a re-serialized list."""
+    ctx = _FakeCtx()
+    stash_candidate_signals(ctx, [{"company": "Ramp", "posting_score": 2, "has_alumni": True}])
+    assert ctx.state[CANDIDATE_SIGNALS_KEY] == {"ramp": {"posting_score": 2, "has_alumni": True}}
+    # LLM re-emits the org with the signals dropped, only motivation added:
+    recovered = recover_signals(ctx, [{"company": "Ramp", "motivation": 5}])
+    assert recovered[0]["posting_score"] == 2 and recovered[0]["has_alumni"] is True
+
+
+def test_recover_signals_no_context_is_identity():
+    companies = [{"company": "X", "posting_score": 3, "has_alumni": True, "motivation": 4}]
+    assert recover_signals(None, companies) == companies
+
+
+def test_source_organizations_stashes_signals_in_state(monkeypatch):
+    def router(model, contents, config):
+        return _resp(_orgs_json(40), metadatas=[_meta()])
+
+    _install(monkeypatch, router)
+    ctx = _FakeCtx()
+    source_organizations("Fintech", "NYC", "PM", ctx)
+    idx = ctx.state[CANDIDATE_SIGNALS_KEY]
+    assert "co2" in idx and idx["co2"]["posting_score"] == POSTING_SCORE_ACTIVE  # active lens
+    assert idx["co0"]["posting_score"] == 0
+
+
+def test_rank_companies_recovers_dropped_signals_from_state():
+    """rank_companies must rank by the STORED posting_score even when the LLM dropped it."""
+    ctx = _FakeCtx()
+    ctx.state[CANDIDATE_SIGNALS_KEY] = {
+        "alpha": {"posting_score": 2, "has_alumni": False},
+        "beta": {"posting_score": 0, "has_alumni": False},
+    }
+    # Same motivation; the LLM passed both with posting_score missing (would default to 0).
+    scored = [
+        {"company": "Beta", "motivation": 5},
+        {"company": "Alpha", "motivation": 5},
+    ]
+    result = rank_companies(scored, ctx)
+    # Alpha's stored posting_score=2 must break the motivation tie and rank it first.
+    assert [o["company"] for o in result["ranked"]] == ["Alpha", "Beta"]
+    assert result["ranked"][0]["posting_score"] == 2
+
+
+def test_rank_companies_without_state_uses_input_values():
+    """Backward compatibility: no context / empty state → the input's own values rank."""
+    scored = [
+        {"company": "Alpha", "motivation": 5, "posting_score": 0, "has_alumni": False},
+        {"company": "Beta", "motivation": 5, "posting_score": 3, "has_alumni": False},
+    ]
+    result = rank_companies(scored)  # no tool_context
+    assert [o["company"] for o in result["ranked"]] == ["Beta", "Alpha"]  # Beta's P=3 wins
+
+
+def test_source_then_rank_roundtrip_preserves_signals(monkeypatch):
+    """End-to-end within a session: source writes state, rank recovers it after the LLM
+    re-serializes the list (dropping posting_score) to add motivation."""
+    def router(model, contents, config):
+        return _resp(_orgs_json(40), metadatas=[_meta()])
+
+    _install(monkeypatch, router)
+    ctx = _FakeCtx()
+    sourced = source_organizations("Fintech", "NYC", "PM", ctx)
+    # Simulate the orchestrator re-emitting only {company, motivation} (signals dropped).
+    scored = [{"company": o["company"], "motivation": 3} for o in sourced["organizations"]]
+    ranked = rank_companies(scored, ctx)["ranked"]
+    # Every active_postings org recovered posting_score=2 despite being dropped on the way in.
+    assert any(o["posting_score"] == POSTING_SCORE_ACTIVE for o in ranked)
+    assert {o["posting_score"] for o in ranked} == {0, POSTING_SCORE_ACTIVE}
 
 
 def test_alumni_resolution_skipped_gracefully_on_contacts_load_failure(monkeypatch):

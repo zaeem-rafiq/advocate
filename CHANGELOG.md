@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-06-07 — Harden motivation→rank merge: authoritative ranking signals in session state
+
+The orchestrator LLM re-serializes the sourced org list to fold in the user's motivation scores,
+and could **drop** `posting_score`/`has_alumni` — which `rank_companies` / `set_active_five` /
+`save_pipeline` then silently defaulted to 0/False, erasing the signals. Previously this was
+mitigated only by a prompt instruction; now the signals are authoritative server-side via ADK
+session state:
+
+- `core/sourcing.py`: `signals_index` (company → `{posting_score, has_alumni}`) + `reconcile_signals`
+  (restore those two from an authoritative map; `motivation`/identity pass through; pure + immutable).
+- `agents/session_state.py` (new): `stash_candidate_signals` / `recover_signals` — best-effort,
+  duck-typed `tool_context` (no ADK import), a no-op without a context.
+- **Producers stash:** `source_organizations`, `load_seed_companies`.
+- **Consumers recover:** `rank_companies` (the merge), `set_active_five`, `save_pipeline`.
+- Those tools gained an ADK-injected `tool_context` (hidden from the model schema — verified by
+  introspection: model-visible params unchanged). orchestrator step 4 note updated (signals are
+  recovered automatically; "preserve fields" kept as defense-in-depth).
+
+**Safety:** `reconcile_signals` is a no-op when state is empty, so any path that didn't stash (or a
+fresh session) behaves exactly as before — the change can only restore signals, never regress
+ranking. Tests +11. **220 passed, 1 skipped.**
+
 ## 2026-06-07 — LAMP ranking signals (Posting + Alumni) now real for grounded sourcing
 
 Grounded-sourced orgs previously all carried `posting_score=0` / `has_alumni=False`, so the

@@ -8,15 +8,18 @@ from __future__ import annotations
 
 from typing import List
 
+from google.adk.tools.tool_context import ToolContext
+
 from advocate.agents.config import COMPANIES_CSV, CONTACTS_CSV
 from advocate.agents.errors import tool_safe
+from advocate.agents.session_state import recover_signals, stash_candidate_signals
 from advocate.core.models import Org
 from advocate.core.ranker import top_n
 from advocate.data.loaders import contacts_for_company, load_companies, load_contacts
 
 
 @tool_safe
-def rank_companies(companies: List[dict]) -> dict:
+def rank_companies(companies: List[dict], tool_context: ToolContext = None) -> dict:
     """Rank target companies by Motivation -> Posting -> Alumni and return the top 5.
 
     Use this AFTER motivation scores (1-5) have been collected from the user. The
@@ -31,6 +34,9 @@ def rank_companies(companies: List[dict]) -> dict:
         A dict with "top5" (the five highest-ranked companies, best first) and
         "ranked" (all companies in ranked order).
     """
+    # Restore the authoritative posting_score/has_alumni captured at sourcing time, so a
+    # dropped field can't silently zero out a ranking signal; motivation comes from input.
+    companies = recover_signals(tool_context, companies)
     orgs = [
         Org(
             company=c.get("company", ""),
@@ -60,7 +66,7 @@ def rank_companies(companies: List[dict]) -> dict:
 
 
 @tool_safe
-def load_seed_companies() -> dict:
+def load_seed_companies(tool_context: ToolContext = None) -> dict:
     """Load the connected/seeded target companies as a deterministic fallback.
 
     Use this only when grounded search is unavailable, to keep the pipeline
@@ -82,6 +88,9 @@ def load_seed_companies() -> dict:
         }
         for o in orgs
     ]
+    # Same authoritative-signal stash as the grounded path, so the offline fallback's
+    # posting_score/has_alumni survive the LLM's motivation-scoring re-serialization too.
+    stash_candidate_signals(tool_context, companies)
     return {"companies": companies, "count": len(companies)}
 
 
