@@ -216,3 +216,13 @@ Format: date · decision · rationale · reversible?
   (web_search_queries OR chunks); sourcing no longer collects/renders citations it never used. prep is
   unchanged (its cited-prose output still relies on chunks). Verified live: 42 orgs, grounded=True.
   Reversible: yes.
+- **LAMP P + A signals populated for grounded sourcing (were inert).** Sourced orgs all had
+  posting_score=0 / has_alumni=False, so M→P→A collapsed to Motivation-only. Now: Posting = lens-derived
+  (`active_postings` → `POSTING_SCORE_ACTIVE`=2, else 0; PRD S-2(d)); Alumni = contacts-CSV match by
+  normalized name/domain (PRD S-5), default 0 on no match (Edge Case 2). Both deterministic pure code,
+  NO model-emitted/fabricated values. `POSTING_SCORE_ACTIVE` is a flat "confirmed-hiring" score (grounding
+  can't quantify intensity); a missing contacts CSV degrades to has_alumni=False, never crashes.
+  Orchestrator step 4 hardened to preserve these fields through motivation scoring (the field-drop
+  reserialization hazard). Verified live: 45 orgs, 9 at posting_score=2, has_alumni=True on a real match.
+  Reversible: yes. Deferred: multi-lens posting strength (S-3 source_lens(es)); a state-based motivation
+  merge instead of trusting the LLM to keep fields.
