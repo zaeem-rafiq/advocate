@@ -1,7 +1,8 @@
 # Architecture — Advocate
 
-Advocate is a multi-agent system on **Google ADK** with **Gemini on Vertex AI**,
-deployed to **Cloud Run** (scale-to-zero) with **Firestore** for per-user state.
+Advocate is a multi-agent system on Google's **Gemini Enterprise Agent Platform** — built with
+the **Agent Development Kit (ADK)** and **Gemini on Vertex AI** — deployed to **Cloud Run**
+(scale-to-zero) with **Firestore** for per-user state.
 
 ## Agent topology
 
@@ -48,6 +49,11 @@ flowchart TD
 - **`advocate/agents/`** — the ADK agents and the thin function tools that wrap the core.
 - **`agent_apps/advocate_app/`** — ADK discovery package (named to avoid shadowing the
   `advocate` library); `advocate/app.py` serves it on Cloud Run with Cloud Trace enabled.
+- **`advocate/eval/`** — *offline, dev-time* quality harness (Optimize pillar): Vertex AI Gen
+  AI evaluation (LLM-as-judge) scoring the soft qualities the binary gate can't (warmth,
+  personalization, non-salesiness, tone). Pure injectable core (`runner`/`dataset`/`metrics`/
+  `report`) + a lazy `vertex_client` adapter; report-only, never a runtime or CI gate. Run via
+  `pip install ".[eval]" && python -m advocate.eval`. Does **not** ship in the Cloud Run image.
 
 ## Why this shape
 

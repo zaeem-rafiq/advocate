@@ -30,6 +30,33 @@ Payload for 67 orgs drops from ~24 KB to ~2.7 KB of generated call. Empty state 
 passthrough (no regression). Tests +4. **237 passed, 1 skipped.** (Live re-run of the 67-org flow to
 confirm pending redeploy.)
 
+## 2026-06-07 — Optimize pillar: offline draft-quality eval (Vertex Gen AI evaluation)
+
+Added an **offline, report-only** quality-evaluation harness using **Vertex AI Gen AI evaluation**
+(LLM-as-judge), as an *additive* complement to — never a replacement for — the deterministic binary
+gate. `core/email_eval.py` remains the sole runtime arbiter of whether a draft is surfaced
+(machine-checkable, free, in-process). The harness measures the soft qualities regex cannot see:
+**connection_warmth, personalization, non_salesy, tone_conciseness** (pointwise, 1–5).
+
+- **New `advocate/eval/` package**, mirroring the repo's layering: pure data (`types`, `metrics`,
+  `dataset` + a 12-row JSONL set), pure injectable orchestration (`runner.evaluate_drafts`), a thin
+  lazy-imported live adapter (`vertex_client.vertex_judge`, the only file touching `vertexai`), a
+  pure markdown `report`, and an on-demand `python -m advocate.eval` CLI (`--dry-run` bills nothing).
+- **Dependency:** `google-cloud-aiplatform[evaluation]` added under a new optional `[eval]` extra —
+  NOT in the Cloud Run image (the Dockerfile runs a bare `pip install .`), so zero runtime/request
+  cost. The live adapter + CLI are coverage-omitted (like `firestore_repo.py`); the pure layers are
+  unit-tested with an injected fake judge.
+- **Dataset by design** mixes drafts that *pass* the binary gate but differ in soft quality, so the
+  judge's discrimination is the headline.
+
+**Verified live (Vertex Gen AI evaluation, agenticprd/us-central1):** 12 scenarios × 4 metrics =
+**48/48 judge requests computed (~36s)**. Every high-band draft scored **5.0** across all metrics;
+low-band drafts separated correctly — `salesy-pitch-low` → non_salesy **1** (subtle selling the
+word-filter misses), `generic-template-low` → personalization **2**, `robotic-stiff-low`/
+`rambling-low` → tone_conciseness **1**, `me-focused-low` → connection_warmth **1**. Positive
+high−low gap on every metric (1.83–3.50). Report: `docs/eval-report.md`. Tests: **+23 new
+(256 passed, 1 skipped; eval pure layers 99% covered)**.
+
 ## 2026-06-07 — TIARA prep: additive `depth` signal + "research was thin" caveat
 
 When the TIARA research loop (`prepare_informational`) never reached critic `grade="pass"` within

@@ -1,7 +1,8 @@
 # Advocate
 
 Agentic implementation of Steve Dalton's **2-Hour Job Search** (LAMP → 3B7 → TIARA),
-built on Google ADK + Gemini on Vertex AI for the Google for Startups AI Agents Challenge.
+built on Google's **Gemini Enterprise Agent Platform** — ADK + Gemini on Vertex AI — for the
+Google for Startups AI Agents Challenge.
 
 Advocate runs the networking-first job search end to end: it sources ~40 target
 employers (grounded search), ranks them by a deterministic Motivation → Posting →
@@ -36,6 +37,16 @@ python -m advocate.cli                     # offline deterministic tracer-bullet
 The pure-code core (`advocate/core`) and data/services layers are fully unit-tested with
 no cloud dependency. A live Firestore integration test is opt-in:
 `ADVOCATE_FIRESTORE_IT=1 GOOGLE_CLOUD_PROJECT=agenticprd uv run --no-project pytest tests/test_firestore_integration.py`.
+
+Offline draft-quality eval (Vertex AI Gen AI evaluation, LLM-as-judge) is an opt-in dev tool —
+complementary to, not a replacement for, the deterministic binary gate, and never shipped in the
+Cloud Run image:
+
+```bash
+uv pip install "google-cloud-aiplatform[evaluation]" pandas
+python -m advocate.eval --dry-run          # print judge inputs, bills nothing
+python -m advocate.eval --out docs/eval-report.md   # live billed run on Vertex
+```
 
 ## Calling the deployed agent
 

@@ -276,7 +276,7 @@ active-five, the compliance gate) are **pure code, no LLM** — the model propos
 ### Platform (contest-mandatory stack)
 | ID | Requirement |
 |----|-------------|
-| NFR-1 | Built on **Google ADK** (multi-agent orchestration), **Gemini on Vertex AI**, deployed on **Cloud Run** (decided — not Agent Engine). |
+| NFR-1 | Built on Google's **Gemini Enterprise Agent Platform** (the evolution of Vertex AI Agent Builder): **ADK** (multi-agent orchestration) + **Gemini on Vertex AI**, deployed on **Cloud Run** (decided — not the managed Agent Runtime, formerly Agent Engine). |
 | NFR-2 | Grounding via **Google Search / Vertex AI Search** for sourcing and TIARA research. |
 | NFR-3 | Third-party data use complies with source terms — **no scraping** of LinkedIn/Indeed/Glassdoor/ZipRecruiter; APIs, exports, or user-pasted data only *(disqualification risk per contest rules; enforced in code)*. |
 | NFR-4 | Drafted emails must pass the automated binary eval gate before being surfaced. |

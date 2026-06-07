@@ -14,13 +14,22 @@ search bar. Career centers teach the structured fix by hand, one cohort at a tim
 runs it. **Buyer:** university career centers (measured on employment outcomes that drive
 rankings). **End user:** the job seeker.
 
-## How it uses the Google stack
-- **ADK multi-agent**: root orchestrator + a grounded Sourcing sub-agent, over deterministic
-  function tools.
-- **Gemini on Vertex AI**: Flash for routine steps, Pro for sourcing + research.
-- **Google Search grounding**: sourcing employers and TIARA research — no scraping.
-- **Cloud Run** (scale-to-zero) deployment; **Firestore** for per-user state; **Cloud Trace**
-  for per-step observability.
+## How it uses Google's agent platform
+Built on Google's **Gemini Enterprise Agent Platform** (the evolution of Vertex AI Agent
+Builder), drawing primarily on the **Build** pillar plus **Optimize** (Cloud Trace + Gen AI
+evaluation). **Scale** and **Govern** run on core GCP rather than the platform's managed agent
+services — a deliberate, cost-driven choice (see `docs/DECISIONS.md`).
+
+- **Agent Development Kit (ADK)** *(Build)*: root orchestrator + a grounded Sourcing sub-agent,
+  over deterministic function tools.
+- **Gemini on Vertex AI** *(Build)*: Flash for routine steps, Pro for sourcing + research.
+- **Google Search grounding** *(Build)*: sourcing employers and TIARA research — no scraping.
+- **Cloud Run** (scale-to-zero) + **Firestore** per-user state *(Scale — self-hosted, not the
+  managed Agent Runtime / Memory Bank)*; **IAM** least-privilege runtime SA, authenticated-only
+  *(Govern — core IAM, not Agent Gateway/Registry)*.
+- **Cloud Trace** per-step observability + **Vertex AI Gen AI evaluation** — an offline LLM-as-judge
+  harness scoring draft warmth/personalization/non-salesiness/tone that the binary gate can't see;
+  report-only, never a runtime gate *(Optimize)*. See `docs/eval-report.md`.
 
 ## What makes it credible (not a chat demo)
 - The **M→P→A ranker**, **3B7 business-day math**, **active-five invariant**, and the

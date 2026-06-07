@@ -1,7 +1,7 @@
 [project]
 name = "advocate"
 version = "0.1.0"
-description = "Advocate — agentic 2-Hour Job Search (LAMP -> 3B7 -> TIARA) on Google ADK + Vertex AI"
+description = "Advocate — agentic 2-Hour Job Search (LAMP -> 3B7 -> TIARA) on Google's Gemini Enterprise Agent Platform (ADK + Gemini on Vertex AI)"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -18,6 +18,14 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
+]
+# Offline (dev-time) quality-evaluation harness — Vertex AI Gen AI evaluation
+# (LLM-as-judge). NOT installed in the Cloud Run image (the Dockerfile runs a bare
+# `pip install .`), so it never bloats the runtime or the request path. Run on demand:
+#   pip install ".[eval]" && python -m advocate.eval
+eval = [
+    "google-cloud-aiplatform[evaluation]>=1.71.0",
+    "pandas>=2.0",
 ]
 
 [build-system]
@@ -38,4 +46,9 @@ omit = [
     "advocate/agents/*",
     # Live adapter: verified by the opt-in Firestore integration test, not unit coverage.
     "advocate/data/firestore_repo.py",
+    # Live Vertex Gen AI evaluation adapter + on-demand CLI: verified by the live eval
+    # run, not unit coverage (same rationale as firestore_repo). The pure orchestration
+    # in advocate/eval/runner.py IS unit-tested with an injected fake judge.
+    "advocate/eval/vertex_client.py",
+    "advocate/eval/__main__.py",
 ]
