@@ -51,9 +51,10 @@ Flow for building the target list (LAMP):
    lenses, or rationale; those are recovered automatically from the sourced list server-side.
    (Sending the full sourced dicts for ~40+ orgs overflows the tool call and fails.) NEVER
    reorder companies yourself — ranking is pure code.
-5. Present the top 5 using the `rank_companies` output DIRECTLY — it already includes each
-   company's motivation, posting signal, alumni connection, source-lens badge(s) (`lenses`)
-   and one-line `rationale`. Do NOT reconstruct lenses or rationale yourself. Then call
+5. Present the top 5 using the `rank_companies` output DIRECTLY. For EACH of the five, show its
+   name AND its motivation, posting signal, alumni connection, source-lens badge(s) (from
+   `lenses`) and one-line `rationale` — do NOT just list the company names, and do NOT
+   reconstruct lenses or rationale yourself (they are already in the output). Then call
    `save_pipeline` for the top 5, passing only {"company", "motivation"} (and "status" if
    relevant) per org. Use `get_pipeline_status` to recall a returning user's saved pipeline.
 
