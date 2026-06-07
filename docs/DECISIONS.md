@@ -97,3 +97,13 @@ Format: date · decision · rationale · reversible?
   2. **Demo video** — manual recording; script is in docs/DEMO_SCRIPT.md.
   3. **Public (unauthenticated) Cloud Run access for judges** — currently authenticated-only;
      making it public was deferred (classifier-gated) and is a separate explicit decision.
+
+- **Migrated to Google ADK 2.x (`google-adk` 2.2.0).** Pinned `>=2.2.0,<3.0.0` (was the
+  unbounded `>=0.3.0`) and bumped `requires-python` to `>=3.11` — ADK 2.0 requires 3.11+
+  (updates the earlier "Python 3.12" note; the `uv` venv now resolves 3.13). No application
+  code changed: the `LlmAgent` / tools / `get_fast_api_app` surface is stable across 1.x→2.x;
+  102 tests green, app serves (`/list-apps` → `advocate_app`, 49 routes). The 2.0 "don't share
+  persistent storage with 1.x" warning does NOT apply here — ADK sessions are in-memory (no
+  `session_service_uri`) and Firestore holds only app-domain state behind `PipelineRepository`,
+  which ADK never touches. Reversible: yes (re-pin to `<2.0.0`). NOTE: prod redeploy on 2.x not
+  yet done — the live Cloud Run revision still runs the pre-migration build.

@@ -3,9 +3,11 @@ name = "advocate"
 version = "0.1.0"
 description = "Advocate — agentic 2-Hour Job Search (LAMP -> 3B7 -> TIARA) on Google ADK + Vertex AI"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
-    "google-adk>=0.3.0",
+    # Pinned to the validated ADK 2.x line; 2.0 introduced breaking changes and
+    # requires Python >=3.11. Cap below 3.0 so the next major can't silently break us.
+    "google-adk>=2.2.0,<3.0.0",
     "google-cloud-firestore>=2.16.0",
     "google-genai>=0.3.0",
     # Cloud Trace export for ADK's trace_to_cloud observability.
