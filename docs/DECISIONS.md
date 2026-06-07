@@ -5,6 +5,18 @@ Format: date · decision · rationale · reversible?
 
 ---
 
+## 2026-06-07 — Re-deploy advocate-00025-wt4 (integrated: main runtime + eval) — supersedes 00024
+
+Caught after the fact: `advocate-00024-tzg` was built from this worktree branch on a STALE base
+(merge-base `6b49b71`), so it shipped WITHOUT main's two runtime commits — `cc4f92f` (minimal
+`{company,motivation}` payload fix) + `914e8ee` (lens badges inline) — a brief prod regression.
+Fixed by rebasing the eval work onto `origin/main` (resolved the CHANGELOG/DECISIONS top-entry
+conflicts), re-running the full suite (**260 passed, 1 skipped**), and redeploying from the
+integrated tree. New revision **advocate-00025-wt4** serves 100%; SA `advocate-run@…`, the three
+env vars, and authenticated-only ingress preserved. Smoke: auth `GET /list-apps → 200
+["advocate_app"]`, anon → 403. Lesson: deploy from merged `main`, not a worktree branch off a
+stale base. Reversible: yes (roll traffic to a prior revision).
+
 ## 2026-06-07 — Prod deploy advocate-00024-tzg (eval harness + naming)
 
 `gcloud run deploy advocate --source .` after the offline Vertex Gen AI eval harness +
