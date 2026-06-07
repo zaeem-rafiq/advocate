@@ -9,11 +9,15 @@ the genai client is lazy-imported so the pure-code tests don't need it.
 """
 from __future__ import annotations
 
+import logging
 from typing import List
 
 from advocate.agents.config import LOCATION, PROJECT, ROUTINE_MODEL, USE_VERTEX
+from advocate.agents.errors import scrub_message
 from advocate.core.drafting import DraftRejected, draft_until_passing
 from advocate.core.email_eval import MAX_WORDS, EmailEval
+
+_LOG = logging.getLogger("advocate.drafting")
 
 # Dalton's 5-point connection-first email, distilled into a generation contract.
 _FEW_SHOT = (
@@ -102,7 +106,12 @@ def draft_outreach_email(
 
     The draft is generated, then minimally revised until it passes the binary eval
     (<=100 words, no job request, connection present, question-form ask). A draft
-    that cannot pass is NOT surfaced — an error is returned instead.
+    that cannot pass is NOT surfaced — a failure result is returned instead.
+
+    This tool handles its own errors so its return contract is uniform: any failure —
+    a draft that can't meet the constraints OR a backend/LLM fault (Gemini/Vertex
+    unavailable) — comes back as {"passed": False, ...}. It is therefore deliberately
+    NOT wrapped by tool_safe (whose bare {"error": ...} shape would drop the "passed" key).
 
     Args:
         contact_name: the person being contacted.
@@ -112,29 +121,33 @@ def draft_outreach_email(
 
     Returns:
         On success: {"email", "word_count", "attempts", "passed": True}.
-        On failure: {"passed": False, "error", "failures"}.
+        On failure: {"passed": False, "error", "failures"} — "failures" lists the unmet
+        compliance checks, and is empty when the failure was a backend/LLM fault.
     """
     from google import genai  # lazy import; only needed in the live path
 
-    client = genai.Client(vertexai=USE_VERTEX, project=PROJECT or None, location=LOCATION)
-
-    def generate(attempt: int) -> str:
-        # `attempt` is part of the Generator contract but unused: attempt 0 is the only
-        # generated draft; later attempts are handled by revise() below.
-        prompt = _build_prompt(contact_name, company, your_background, connection)
-        resp = client.models.generate_content(model=ROUTINE_MODEL, contents=prompt)
-        return (resp.text or "").strip()
-
-    def revise(draft: str, evaluation: EmailEval) -> str:
-        prompt = _build_revise_prompt(draft, evaluation.failures, connection)
-        resp = client.models.generate_content(model=ROUTINE_MODEL, contents=prompt)
-        return (resp.text or "").strip()
-
     terms = _connection_terms(company, connection)
     try:
+        client = genai.Client(vertexai=USE_VERTEX, project=PROJECT or None, location=LOCATION)
+
+        def generate(attempt: int) -> str:
+            # `attempt` is part of the Generator contract but unused: attempt 0 is the only
+            # generated draft; later attempts are handled by revise() below.
+            prompt = _build_prompt(contact_name, company, your_background, connection)
+            resp = client.models.generate_content(model=ROUTINE_MODEL, contents=prompt)
+            return (resp.text or "").strip()
+
+        def revise(draft: str, evaluation: EmailEval) -> str:
+            prompt = _build_revise_prompt(draft, evaluation.failures, connection)
+            resp = client.models.generate_content(model=ROUTINE_MODEL, contents=prompt)
+            return (resp.text or "").strip()
+
         result = draft_until_passing(generate, terms, revise=revise)
     except DraftRejected as exc:
         return {"passed": False, "error": str(exc), "failures": exc.last_eval.failures}
+    except Exception as exc:  # backend/LLM fault (Vertex/Gemini unavailable, auth, quota)
+        _LOG.exception("draft_outreach_email failed")
+        return {"passed": False, "error": scrub_message(exc), "failures": []}
 
     return {
         "email": result.email,

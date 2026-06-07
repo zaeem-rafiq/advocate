@@ -9,11 +9,13 @@ from __future__ import annotations
 from typing import List
 
 from advocate.agents.config import COMPANIES_CSV, CONTACTS_CSV
+from advocate.agents.errors import tool_safe
 from advocate.core.models import Org
 from advocate.core.ranker import top_n
 from advocate.data.loaders import contacts_for_company, load_companies, load_contacts
 
 
+@tool_safe
 def rank_companies(companies: List[dict]) -> dict:
     """Rank target companies by Motivation -> Posting -> Alumni and return the top 5.
 
@@ -57,6 +59,7 @@ def rank_companies(companies: List[dict]) -> dict:
     return {"top5": [_dump(o) for o in ranked[:5]], "ranked": [_dump(o) for o in ranked]}
 
 
+@tool_safe
 def load_seed_companies() -> dict:
     """Load the connected/seeded target companies as a deterministic fallback.
 
@@ -82,6 +85,7 @@ def load_seed_companies() -> dict:
     return {"companies": companies, "count": len(companies)}
 
 
+@tool_safe
 def find_starter_contact(company: str) -> dict:
     """Find a starter networking contact at a company from the connected source.
 
