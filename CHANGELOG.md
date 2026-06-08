@@ -24,7 +24,10 @@ connections", none with a contact).
 - **Tests:** `tests/test_companies_with_contacts.py` (+8) locks the per-input `companies_with_contacts` ⇄
   `find_starter_contact` invariant across whitespace/case variants, the `has_alum=False` branch, blank/dup
   dedup, and empty-list enumeration; the tool is added to `GUARDED_TOOLS` (`@tool_safe` boundary).
-  **275 passed, 1 skipped** (3.12 venv). Prompt + tool change → requires a Cloud Run redeploy to take effect.
+  **275 passed, 1 skipped** (3.12 venv). **Deployed advocate-00029-4wm** (100% traffic; SA + 3 env vars +
+  auth-only ingress preserved): anon `GET /list-apps → 403`, authed `→ 200`; a live prod session asked "where
+  do I have a contact?" → the agent called `companies_with_contacts` (count=15 real contact companies) and
+  answered from the contacts source, not the lens badge.
 
 ## 2026-06-08 — Demo unblock: industry-matched contact fixtures + case-insensitive contact match
 

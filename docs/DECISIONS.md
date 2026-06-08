@@ -5,6 +5,36 @@ Format: date · decision · rationale · reversible?
 
 ---
 
+## 2026-06-08 — Prod deploy advocate-00029-4wm (disambiguate the alumni_employers lens from an actual contact) — supersedes 00028
+
+Resolves the open follow-up logged under 00028: the orchestrator conflated the `alumni_employers` source
+LENS (a discovery badge — "this company hires alumni from the seeker's school/industry") with `has_alumni` /
+an actual contact (the user personally knows someone, from their contacts CSV). Asked "where do I have a
+contact?", it listed lens-badged companies as connections, then `find_starter_contact` found nothing — a
+dead end.
+
+- **Ships:** a new read-only tool `companies_with_contacts(companies)` (returns which of the given companies
+  have a contact in the loaded contacts CSV, routed through the SAME `contacts_for_company` helper
+  `find_starter_contact` uses, so the two can never disagree for any input) + orchestrator prompt edits
+  (steps 3 & 5, a dedicated "Where do I have a contact?" section, and a guardrail) that route contact
+  questions to the tool / `has_alumni`, never the lens badge. +8 tests; **275 passed, 1 skipped** (3.12 venv).
+- **Deploy discipline:** committed on the branch, then **rebased onto `origin/main` first** — which had
+  advanced to `23153b7` (the 00028 work) while this was in flight; the stale-base guard caught it. FF push to
+  `origin/main` (`367b60a..8c9dbc0`), then `gcloud run deploy --source .` from the **worktree whose content
+  == `origin/main`** (the primary checkout was behind + dirty — deploying from it would have dropped the
+  fintech/casefold commit, the exact 00024-class regression).
+- **New revision advocate-00029-4wm** serves 100%. SA `advocate-run@…`, the three env vars, and
+  `--no-allow-unauthenticated` all preserved (verified: `ingress=all`, anonymous `GET /list-apps → 403`,
+  authenticated `→ 200 ["advocate_app"]` — the app imported `root_agent` with the new tool cleanly).
+- **Live functional check:** an authenticated prod session asked "which companies do I personally have a
+  contact at?" → the agent called `companies_with_contacts`, which returned `count=15` of real contact
+  companies (Helio Grid, Verdant Mobility, CarbonLedger, …) and the agent answered from the **contacts
+  source**, not the lens badge. (Default = climate fixture; no `ADVOCATE_*` override on the service.)
+- **Rollback:** `gcloud run services update-traffic advocate --region us-central1 --to-revisions advocate-00028-jkc=100`.
+  Reversible? Yes.
+
+---
+
 ## 2026-06-08 — Prod deploy advocate-00028-jkc (industry-matched fintech fixtures + case-insensitive contact match) — supersedes 00027
 
 Triggered by a live **fintech** demo where every `find_starter_contact` returned empty: the loaded contacts
