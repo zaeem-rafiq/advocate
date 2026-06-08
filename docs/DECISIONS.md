@@ -5,6 +5,36 @@ Format: date · decision · rationale · reversible?
 
 ---
 
+## 2026-06-08 — Prod deploy advocate-00028-jkc (industry-matched fintech fixtures + case-insensitive contact match) — supersedes 00027
+
+Triggered by a live **fintech** demo where every `find_starter_contact` returned empty: the loaded contacts
+fixture was the **climate** set, so no sourced fintech org matched (contact lookup is a name match against
+the user's contacts export — by design). Deployed `main` @ `23153b7` from the merged tree (committed on the
+branch, **rebased onto `origin/main` first** so the deploy couldn't drop `b26e278` — the stale-base guard;
+FF push to `origin/main`, then `gcloud run deploy --source .` from the worktree whose content == `origin/main`).
+
+- **Ships:** a fintech scenario — `demo_alumni_contacts_fintech.csv` + `demo_target_companies_fintech.csv`,
+  runtime-selected via `ADVOCATE_CONTACTS_CSV` / `ADVOCATE_COMPANIES_CSV`. Both CSVs are baked into the
+  image; **climate remains the default** (no `ADVOCATE_*` override on the service), preserving the recorded
+  Priya/climate demo. Also fixes `contacts_for_company` to casefold-match (was case-sensitive while
+  `resolve_alumni` casefolds — an org could be `has_alumni=True` yet yield no contact). +1 regression test.
+- **Pre-deploy review:** a 4-way adversarial pass (code / fixtures / deploy-config / git-safety) — fixtures
+  parse & are consistent (24 contacts / 18 orgs, alumni flags aligned, names match the sourced list, all
+  synthetic); the two flagged footguns (commit CSVs before `--source .`; re-pass all preservation flags)
+  were both handled in-sequence.
+- **New revision advocate-00028-jkc** serves 100%. SA `advocate-run@…`, the three env vars, and
+  `--no-allow-unauthenticated` all preserved (verified: `ingress=all`, anonymous `GET /list-apps → 403`,
+  authenticated `→ 200 ["advocate_app"]`). Build COPY of all four CSVs succeeded → fintech fixtures are in
+  the image.
+- **Fintech flip (no rebuild):** `gcloud run services update advocate --region us-central1 --project
+  agenticprd --update-env-vars ADVOCATE_CONTACTS_CSV=demo_alumni_contacts_fintech.csv,ADVOCATE_COMPANIES_CSV=demo_target_companies_fintech.csv`
+  — revert with `--remove-env-vars ADVOCATE_CONTACTS_CSV,ADVOCATE_COMPANIES_CSV`.
+- **Rollback:** `gcloud run services update-traffic advocate --region us-central1 --to-revisions advocate-00027-mn8=100`.
+- **Open follow-up:** orchestrator prompt conflates the "Alumni employers" lens with actually having a
+  contact (separate task; prompt fix + redeploy). Reversible? Yes.
+
+---
+
 ## 2026-06-07 — Prod deploy advocate-00027-mn8 (sourcing first-pass retry + observable logs) — supersedes 00026
 
 Deployed `main` @ `0eea171` from the merged tree (FF push to `origin/main`, then `gcloud run deploy
