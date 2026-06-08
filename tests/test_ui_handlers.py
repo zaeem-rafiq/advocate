@@ -103,6 +103,24 @@ def test_on_approve_schedules_3b7_and_states_draft_only(monkeypatch):
 
 # ----- _on_source: validation + streaming -----
 
+class _FakeRequest:
+    def __init__(self, headers):
+        self.headers = headers
+
+
+def test_iap_blocked_fails_closed_only_when_required(monkeypatch):
+    # REQUIRE_IAP unset -> never blocks (local/dev).
+    monkeypatch.delenv("REQUIRE_IAP", raising=False)
+    assert app._iap_blocked(_FakeRequest({})) is False
+    # REQUIRE_IAP=1 -> an authenticated request (signed assertion OR email) is allowed...
+    monkeypatch.setenv("REQUIRE_IAP", "1")
+    assert app._iap_blocked(_FakeRequest({"x-goog-iap-jwt-assertion": "tok"})) is False
+    assert app._iap_blocked(_FakeRequest({"x-goog-authenticated-user-email": "u@x.com"})) is False
+    # ...but a request with NO IAP headers (boundary bypassed) is refused.
+    assert app._iap_blocked(_FakeRequest({})) is True
+    assert app._iap_blocked(None) is True
+
+
 def test_on_source_requires_industry_and_function():
     out = list(app._on_source("", "NYC", ""))
     assert len(out) == 1 and "industry" in out[0][0].lower()

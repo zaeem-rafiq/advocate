@@ -56,19 +56,28 @@ def _ranked_motivations(ranked: list) -> dict:
     return {o["company"]: o.get("motivation") for o in (ranked or [])}
 
 
-def _iap_blocked(request) -> bool:
-    """Defense-in-depth: when REQUIRE_IAP=1, refuse requests with no IAP-injected identity.
+# IAP headers Cloud Run injects for an authenticated request (verified: cloud.google.com/iap/docs).
+# x-goog-iap-jwt-assertion is the signed proof and is ALWAYS present; the email header is the
+# plain-text convenience copy. Requiring the PRESENCE of either is a fail-closed signal that IAP is
+# actually in front — NOT full JWT signature validation (that's the production-grade hardening step).
+_IAP_HEADERS = ("x-goog-iap-jwt-assertion", "x-goog-authenticated-user-email")
 
-    The security boundary is Cloud Run + IAP; this fails CLOSED on the expensive grounded
-    path if that boundary is ever misconfigured/removed. No-op locally (REQUIRE_IAP unset).
+
+def _iap_blocked(request) -> bool:
+    """Defense-in-depth: when REQUIRE_IAP=1, refuse requests carrying no IAP-injected identity.
+
+    The security boundary is Cloud Run + IAP; this fails CLOSED on the expensive grounded path if
+    that boundary is ever misconfigured/removed. No-op locally (REQUIRE_IAP unset). Because IAP
+    always adds the signed assertion to authenticated requests, enabling this cannot lock out a
+    legitimately signed-in user.
     """
     if os.environ.get("REQUIRE_IAP", "").strip().upper() not in ("1", "TRUE"):
         return False
     try:
-        email = (request.headers.get("x-goog-authenticated-user-email", "") if request else "")
+        headers = request.headers if request is not None else {}
+        return not any(headers.get(h) for h in _IAP_HEADERS)
     except Exception:  # noqa: BLE001 — a missing/odd request object => treat as unauthenticated
-        email = ""
-    return not email
+        return True
 
 
 # ----- step handlers (thin wrappers over the tested pipeline) -----
