@@ -426,6 +426,26 @@ passing draft is ever surfaced. Pattern adapted from `google/adk-samples` LLM Au
   first-draft-passes, revise-exception-propagates. Removed the now-dead per-retry branch
   in `_build_prompt` (the reviser supersedes it). 109 passed, 1 skipped.
 
+## 2026-06-07 — Resolved Cloud Trace `PERMISSION_DENIED` (IAM propagation lag, no code change)
+
+Investigated the open Cloud Trace export failure
+(`cloudtrace.traces.patch denied on //logging.googleapis.com/projects/agenticprd`). Root cause was
+**IAM propagation lag**, not a config defect and not the quota/attribution issue the resource string
+suggested.
+
+- **Forensics:** `roles/cloudtrace.agent` was granted to `advocate-run` at `2026-06-06T20:01:24Z`; the
+  exporter's `BatchWriteSpans` flush 403'd `20:01:30Z` (6s later, mid-propagation). All 8 errors are on
+  the single 1.x revision `advocate-00012-n7n` within one minute; none before the grant, none after, none
+  on the current ADK-2.x revision `advocate-00013-vp6`.
+- **The `logging.googleapis.com` container is a red herring** — Cloud Trace reports IAM denials against
+  the shared Cloud Operations / Logging resource container. No `GOOGLE_CLOUD_QUOTA_PROJECT` override is
+  needed (and none was added).
+- **No code or config change.** IAM, API enablement, runtime SA, and the `opentelemetry-exporter-gcp-trace`
+  exporter were all already correct.
+- **Verified on prod `advocate-00013-vp6`:** 9 authenticated `/run` calls (HTTP 200, live agent spans) →
+  zero `cloudtrace.traces.patch` 403s in logs; Cloud Monitoring shows
+  `cloudtrace…BatchWriteSpans → rc=200 ×4, zero denials`. Trace export is healthy.
+
 ## 2026-06-06 — Migrated to Google ADK 2.x (`google-adk` 2.2.0)
 
 Moved off the unbounded `google-adk>=0.3.0` pin onto the validated 2.x line. No

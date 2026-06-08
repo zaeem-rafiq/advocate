@@ -276,21 +276,25 @@ on the request path imports it). Reversible: yes (roll traffic back to a prior r
   smoke passed: authenticated `GET /list-apps → 200 ["advocate_app"]`. Added a `.gcloudignore`
   (`#!include:.gitignore` + `.claude/ .git/ docs/ tests/ …`) so `--source` no longer uploads the 123M
   `.claude/` worktree tree / venvs to Cloud Build.
-- **RESOLVED — the Cloud Trace `PERMISSION_DENIED` was the pre-migration revision only.** The
-  `Permission 'cloudtrace.traces.patch' denied` errors were all logged by the OLD revision
-  `advocate-00012-n7n` during agent activity (verified via `gcloud logging read` filtered by
-  revision). On the live 2.x revision `advocate-00013-vp6`, a real agent `/run` produced **zero**
-  trace-export errors (verified; logs confirmed flowing). The export path is identical across versions
-  (`get_fast_api_app(trace_to_cloud=True)`, `otel_to_cloud` default `False` → the `CloudTraceSpanExporter`
-  branch at `fast_api.py:587` runs), so the difference is environmental, not code: the slice-9
-  `roles/cloudtrace.agent` grant was evidently not yet effective for `00012`'s runtime credentials, and
-  the fresh `00013` redeploy picked up the now-effective role — i.e. the ADK 2.x migration redeploy
-  incidentally fixed it. IAM/API confirmed correct (role includes `cloudtrace.traces.patch`,
-  unconditional; no deny policy; API enabled). Caveat: positive span listing via the legacy
-  `listTraces` v1 API returned 0 even after an indexing wait (a known v1 quirk) — eyeball the Cloud
-  Trace console (Trace Explorer) for `agenticprd` if you want visual confirmation of spans. (Correcting
-  the record: my earlier "the deployed 2.x build is failing trace export" was a misattribution of the
-  old revision's drain-window logs surfaced by `logs read` on an idle service.)
+- **RESOLVED — Cloud Trace `PERMISSION_DENIED` was IAM propagation lag, not a config defect.**
+  Forensics: admin audit log shows `roles/cloudtrace.agent` was ADDed to `advocate-run` at
+  `2026-06-06T20:01:24Z`; the exporter's `BatchWriteSpans` flush fired `2026-06-06T20:01:30Z` —
+  **6 seconds later**, inside the IAM propagation window. All **8** occurrences of
+  `cloudtrace.traces.patch denied` are on the single 1.x revision `advocate-00012-n7n` within the one
+  minute `20:01`; zero before the grant, zero after, zero on the ADK-2.x revision `advocate-00013-vp6`.
+  The `//logging.googleapis.com/projects/agenticprd` resource container is a Cloud Trace IAM-error
+  reporting quirk (Cloud Trace shares the Cloud Operations control plane with Cloud Logging) — **not** a
+  quota/billing-project misattribution; `GOOGLE_CLOUD_QUOTA_PROJECT` is not needed and was not set.
+  IAM/API config was correct all along (API enabled, `cloudtrace.agent` granted with no IAM condition,
+  runtime SA = `advocate-run`). **No code or config fix required.**
+  - **Verified clean on prod `advocate-00013-vp6`** (2026-06-07): drove 9 authenticated `/run` calls
+    (all HTTP 200, real Gemini-2.5-Flash agent spans). Result: **zero** `cloudtrace.traces.patch` 403s in
+    Cloud Run logs, and Cloud Monitoring `serviceruntime.googleapis.com/api/request_count` for
+    `cloudtrace.googleapis.com` shows `…TraceService.BatchWriteSpans` → **rc=200 ×4, zero denials** — the
+    runtime SA is now writing spans to Cloud Trace successfully. (The Trace v1 *list* API lags by minutes
+    on indexing; the BatchWriteSpans=200 server-side metric is the authoritative confirmation.)
+  - **Operational note:** when first granting a trace/IAM role to a fresh SA, allow a few minutes for
+    IAM propagation before trusting trace export — an immediate post-grant flush can 403 transiently.
 
 ## 2026-06-07 — Iterative cited TIARA research pipeline
 
