@@ -1,0 +1,15 @@
+# Builds the Advocate UI image from Dockerfile.ui (the default `Dockerfile` builds the
+# ADK service). Pushes to the same Artifact Registry repo the ADK service uses.
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-f'
+      - 'Dockerfile.ui'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/agenticprd/cloud-run-source-deploy/advocate-ui:latest'
+      - '.'
+images:
+  - 'us-central1-docker.pkg.dev/agenticprd/cloud-run-source-deploy/advocate-ui:latest'
+options:
+  logging: CLOUD_LOGGING_ONLY

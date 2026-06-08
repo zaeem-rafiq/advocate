@@ -1,0 +1,30 @@
+# Cloud Run image for the Advocate Gradio "Guided Sprint" UI (separate service from
+# the ADK agent in Dockerfile). Imports the advocate package in-process — no /run_sse.
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    UV_SYSTEM_PYTHON=1 \
+    PORT=8080 \
+    # Route Gemini through Vertex AI (no API keys in source); project/location are
+    # supplied as Cloud Run env vars at deploy time.
+    GOOGLE_GENAI_USE_VERTEXAI=TRUE
+
+# Build with uv, not pip: gradio pins starlette<1.0 while google-adk (needed because the
+# in-process tools import ToolContext) accepts a wider range. pip's resolver calls this
+# impossible; uv finds the compatible set (starlette 0.5x) — the same resolution proven
+# in the local .venv (adk 2.2.0 + gradio 5.50, imports OK, 270 tests green).
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+WORKDIR /app
+
+# Copy source BEFORE install so hatchling can build the advocate wheel with the
+# `ui` extra (gradio). The seeded CSVs back the offline fallback + alumni matching.
+COPY pyproject.toml README.md ./
+COPY advocate ./advocate
+COPY demo_target_companies.csv demo_alumni_contacts.csv ./
+
+RUN uv pip install --system ".[ui]"
+
+EXPOSE 8080
+CMD ["python", "-m", "advocate.ui"]
