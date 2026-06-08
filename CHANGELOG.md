@@ -30,6 +30,31 @@ Files: NEW `.claude/skills/` (23 skills), `.claude/agents/` (3 personas + README
 `.claude/settings.json`, `.claude/VENDORED.md`, `.claude/skills/LICENSE`; MODIFIED `.gitignore`
 (ignore hook caches).
 
+## 2026-06-08 — Polish: Gradio Guided Sprint UI → finished-product craft pass
+
+The Guided Sprint UI shipped functional but read as stock Gradio (full-bleed left layout, a grey
+`.gr-group` slab behind each step header, full-width blue button bars, a `Built with Gradio · Settings`
+footer, muddy grey inputs). This pass turns it into something that reads as a finished product —
+**no backend/pipeline changes, two files** (`advocate/ui/theme.py`, `advocate/ui/app.py`).
+
+- **Layout:** centered max-width column on a soft-slate page; each step is now a white **card** with
+  border + soft shadow (the grey `.gr-group` slab is gone). Refined **pill stepper** (active/idle/hover).
+- **Buttons:** right-sized (no more full-bleed blue bars) with a hover lift; the gated Draft button now
+  has a real **disabled** state (not a header-like bar) plus an on-panel "unlocks once you've rated 10"
+  explainer. Approve/Regenerate/Discard read as one tight button group.
+- **Inputs & copy:** crisp white fields (single-line targets render as `<input>`, no stray scrollbar);
+  empty-state hints on Rate; a draft-box placeholder; an Advocate footer reinforcing the draft-only guarantee.
+- **Responsive:** container is `width: min(1040px, 100vw)` so a wide table can't stretch the page; on
+  mobile the **stepper scrolls horizontally**, the **data table scrolls inside its card** (flexbox
+  `min-width:0` fix), and in-card rows stack. Dataframe headers now use Inter, not Gradio's mono.
+- **A11y preserved:** visible `:focus-visible` ring never suppressed; `prefers-reduced-motion` kills the
+  card-reveal + hover lift + streaming cursor.
+
+Verified: Playwright across **desktop (1280) and mobile (390)** — Connect, Source (loading state), Rate
+(empty + 40-row populated), Outreach (empty, disabled-gate, populated draft with focus ring); page no
+longer overflows horizontally on mobile (`docScrollW == viewport`). **300 passed, 1 skipped** (handler
+signatures unchanged, so the existing UI tests still hold). Files: `advocate/ui/theme.py`, `advocate/ui/app.py`.
+
 ## 2026-06-08 — Feature: Gradio "Guided Sprint" end-user UI (separate Cloud Run service, behind IAP)
 
 Advocate's only surfaces were the ADK dev playground (Google's own debug UI, "not a user-facing UI"),
