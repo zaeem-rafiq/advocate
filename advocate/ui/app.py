@@ -23,6 +23,8 @@ from advocate.ui.theme import ADVOCATE_CSS, advocate_theme
 
 _RATE_HEADERS = ["Company", "Sector", "Posting (1-3)", "Alumni", "Your rating (1-5)"]
 _RANK_HEADERS = ["#", "Company", "Sector", "Motivation", "Posting", "Alumni", "Lenses"]
+_CADENCE_PLACEHOLDER = "_Approve an outreach on the Outreach step to schedule the 3B7 reminders._"
+_PREP_PLACEHOLDER = "_Rank your companies first (or type a company above), then Prepare TIARA questions._"
 
 
 def _nav_updates(target: int) -> list:
@@ -36,7 +38,7 @@ def _nav_updates(target: int) -> list:
 
 
 def _ranked_rows(ranked: list) -> list:
-    """Active-Five display rows (status shown as a text label via the rationale, not colour)."""
+    """Active-Five display rows (status shown as a text label, not colour)."""
     rows = []
     for i, o in enumerate(ranked[:5], 1):
         rows.append([
@@ -49,10 +51,33 @@ def _ranked_rows(ranked: list) -> list:
     return rows
 
 
+def _ranked_motivations(ranked: list) -> dict:
+    """Map company -> motivation from the ranked records (each carries its own motivation)."""
+    return {o["company"]: o.get("motivation") for o in (ranked or [])}
+
+
+def _iap_blocked(request) -> bool:
+    """Defense-in-depth: when REQUIRE_IAP=1, refuse requests with no IAP-injected identity.
+
+    The security boundary is Cloud Run + IAP; this fails CLOSED on the expensive grounded
+    path if that boundary is ever misconfigured/removed. No-op locally (REQUIRE_IAP unset).
+    """
+    if os.environ.get("REQUIRE_IAP", "").strip().upper() not in ("1", "TRUE"):
+        return False
+    try:
+        email = (request.headers.get("x-goog-authenticated-user-email", "") if request else "")
+    except Exception:  # noqa: BLE001 — a missing/odd request object => treat as unauthenticated
+        email = ""
+    return not email
+
+
 # ----- step handlers (thin wrappers over the tested pipeline) -----
 
-def _on_source(industry, geography, function):
+def _on_source(industry, geography, function, request: gr.Request = None):
     """Grounded sourcing with streamed status (so the ~1-min call never looks frozen)."""
+    if _iap_blocked(request):
+        yield ("⛔ Not authenticated — reach this service through Google sign-in (IAP).", gr.update(), [])
+        return
     industry = (industry or "").strip()
     function = (function or "").strip()
     if not industry or not function:
@@ -73,32 +98,45 @@ def _on_source(industry, geography, function):
 
 
 def _on_rank(rate_rows, records):
-    """Parse ratings -> rate-10 gate -> (if unlocked) rank M->P->A + set the Active Five."""
+    """Parse ratings, apply the rate-10 gate, rank M->P->A, and ENABLE outreach only when unlocked.
+
+    Ranking always previews (gate.py never gates the ranking). Only the outreach affordance is
+    gated: when locked, the Draft button is disabled and no company is pre-selected, so the
+    announced lock is real, not cosmetic. The actual draft refusal is enforced again in _on_draft.
+    """
     motivations = pipeline.rate_rows_to_motivations(rate_rows)
     gate = pipeline.gate_status(records, motivations)
-    if not gate["unlocked"]:
-        msg = (f"🔒 Outreach locked — you've rated **{gate['rated']}/{gate['threshold']}**. "
-               f"Rate **{gate['remaining']}** more to unlock drafting. (Ranking still previews below.)")
-    else:
-        msg = f"🔓 Outreach unlocked — **{gate['rated']}** rated. Your Active Five is on the **Rank** step."
     ranked = pipeline.rank_and_activate(records, motivations)
     choices = [o["company"] for o in ranked[:5]]
+    if gate["unlocked"]:
+        msg = f"🔓 Outreach unlocked — **{gate['rated']}** rated. Your Active Five is on the **Rank** step."
+        selected = choices[0] if choices else None
+    else:
+        msg = (f"🔒 Outreach locked — you've rated **{gate['rated']}/{gate['threshold']}**. "
+               f"Rate **{gate['remaining']}** more to unlock drafting. (Ranking still previews below.)")
+        selected = None  # don't pre-select an outreach target while locked
     return (
         msg,
         ranked,
         gr.update(value=_ranked_rows(ranked)),
-        gr.update(choices=choices, value=(choices[0] if choices else None)),
-        gr.update(choices=[o["company"] for o in ranked], value=(choices[0] if choices else None)),
+        gr.update(choices=choices, value=selected),                      # outreach_company
+        gr.update(choices=[o["company"] for o in ranked], value=selected),  # prep_company
+        gr.update(interactive=gate["unlocked"]),                         # draft_btn (locked until 10 rated)
     )
 
 
 def _on_draft(company, background, ranked):
-    """Find a starter contact for the chosen company, then draft a compliant outreach email."""
+    """Find a starter contact for the chosen company, then draft a compliant outreach email.
+
+    Enforces the rate-10 gate server-side (the ranked records carry each org's motivation), so
+    drafting is genuinely refused until 10 orgs are rated — the disabled button is belt-and-braces.
+    """
+    if not pipeline.gate_status(ranked or [], _ranked_motivations(ranked))["unlocked"]:
+        rated = sum(1 for o in (ranked or []) if o.get("motivation") is not None)
+        return (f"🔒 Outreach is locked — rate at least {pipeline.OUTREACH_RATING_THRESHOLD} companies on the "
+                f"**Rate** step first (you've rated {rated}).", gr.update(value=""), {})
     if not company:
         return ("Pick a company on the **Rank** step first.", gr.update(value=""), {})
-    if not pipeline.gate_status(ranked or [], {o["company"]: o.get("motivation") for o in (ranked or [])})["unlocked"]:
-        # Defensive: ranked carries motivations, so this also enforces the rate-10 gate here.
-        pass
     contact = pipeline.starter_contact(company)
     if not contact.get("found"):
         return (f"No connected contact found at **{company}** — pick another company "
@@ -119,7 +157,7 @@ def _on_draft(company, background, ranked):
 def _on_approve(draft_text, meta):
     """Approve = the user sends it themselves; we only schedule the 3B7 reminders."""
     if not (draft_text or "").strip() or not meta:
-        return ("Nothing to approve yet — draft an email first.", "")
+        return ("Nothing to approve yet — draft an email first.", _CADENCE_PLACEHOLDER)
     plan = pipeline.schedule_3b7(date.today().isoformat())
     company, contact = meta.get("company", ""), meta.get("contact", "")
     msg = (f"✅ Logged your outreach to **{contact}** at **{company}**. "
@@ -133,10 +171,16 @@ def _on_approve(draft_text, meta):
     return (msg, cadence_md)
 
 
+def _on_discard():
+    """Discard the draft AND revert the downstream Outreach/3B7 surfaces (no stale schedule)."""
+    return ("Draft discarded.", "", {}, "", _CADENCE_PLACEHOLDER)
+
+
 def _on_prep(company, role):
     """Cited research brief + five TIARA questions for an informational interview."""
     if not company:
-        return "Pick or type a company first."
+        yield "Pick a ranked company above, or type a company name, then Prepare."
+        return
     yield "⏳ Researching the company (grounded Gemini)… up to ~1 minute."
     result = pipeline.prep(company, (role or "this role").strip())
     q = result.get("questions", {})
@@ -154,7 +198,7 @@ def build_app() -> gr.Blocks:
     with gr.Blocks(theme=advocate_theme(), css=ADVOCATE_CSS, title="Advocate", analytics_enabled=False) as demo:
         step = gr.State(0)
         records_state = gr.State([])   # sourced full org records
-        ranked_state = gr.State([])    # ranked Active-Five (carries motivation)
+        ranked_state = gr.State([])    # ranked Active-Five (carries motivation); read by _on_draft to enforce the gate
         meta_state = gr.State({})      # {company, contact} for the approved outreach
 
         gr.Markdown("# Advocate\nYour 2-Hour Job Search, guided — source, rank, reach out, follow up.")
@@ -193,8 +237,11 @@ def build_app() -> gr.Blocks:
         # --- Step 2: Rate ---
         with gr.Group(visible=False) as g2:
             gr.Markdown(f"## Step 2 — Rate\n\n{STEPS[2].description}")
+            # Only the rating column (index 4) is editable — editing identity columns would
+            # mis-key the rate-10 gate (a finding from review); lock columns 0-3.
             rate_df = gr.Dataframe(headers=_RATE_HEADERS, datatype=["str", "str", "number", "str", "number"],
-                                   type="array", interactive=True, label="Gut-rate each company (1–5) in the last column")
+                                   type="array", interactive=True, static_columns=[0, 1, 2, 3],
+                                   label="Gut-rate each company (1–5) in the last column")
             rank_btn = gr.Button("Lock in ratings & rank", variant="primary")
             gate_status = gr.Markdown("")
         groups.append(g2)
@@ -210,7 +257,8 @@ def build_app() -> gr.Blocks:
         # --- Step 4: Outreach (the draft-approval gate) ---
         with gr.Group(visible=False) as g4:
             gr.Markdown(f"## Step 4 — Outreach\n\n{STEPS[4].description}")
-            draft_btn = gr.Button("Draft outreach email", variant="primary")
+            # Disabled until the rate-10 gate unlocks (set interactive by _on_rank).
+            draft_btn = gr.Button("Draft outreach email", variant="primary", interactive=False)
             draft_status = gr.Markdown("")
             draft_box = gr.Textbox(label="Draft (editable) — review, edit, then approve", lines=14, interactive=True)
             with gr.Row():
@@ -223,16 +271,17 @@ def build_app() -> gr.Blocks:
         # --- Step 5: 3B7 cadence ---
         with gr.Group(visible=False) as g5:
             gr.Markdown(f"## Step 5 — 3B7\n\n{STEPS[5].description}")
-            cadence_view = gr.Markdown("_Approve an outreach on the Outreach step to schedule the 3B7 reminders._")
+            cadence_view = gr.Markdown(_CADENCE_PLACEHOLDER)
         groups.append(g5)
 
         # --- Step 6: Prep (TIARA) ---
         with gr.Group(visible=False) as g6:
             gr.Markdown(f"## Step 6 — Prep\n\n{STEPS[6].description}")
-            prep_company = gr.Dropdown(label="Company for the informational", choices=[], interactive=True)
+            prep_company = gr.Dropdown(label="Company for the informational", choices=[],
+                                       interactive=True, allow_custom_value=True)
             prep_role = gr.Textbox(label="Role / function you're exploring", placeholder="e.g. product management")
             prep_btn = gr.Button("Prepare TIARA questions", variant="primary")
-            prep_view = gr.Markdown("")
+            prep_view = gr.Markdown(_PREP_PLACEHOLDER)
         groups.append(g6)
 
         # ----- wiring -----
@@ -255,13 +304,13 @@ def build_app() -> gr.Blocks:
         source_btn.click(_on_source, inputs=[industry_in, geography_in, function_in],
                          outputs=[source_status, rate_df, records_state])
         rank_btn.click(_on_rank, inputs=[rate_df, records_state],
-                       outputs=[gate_status, ranked_state, ranked_df, outreach_company, prep_company])
+                       outputs=[gate_status, ranked_state, ranked_df, outreach_company, prep_company, draft_btn])
         draft_btn.click(_on_draft, inputs=[outreach_company, background_in, ranked_state],
                         outputs=[draft_status, draft_box, meta_state])
         regen_btn.click(_on_draft, inputs=[outreach_company, background_in, ranked_state],
                         outputs=[draft_status, draft_box, meta_state])
         approve_btn.click(_on_approve, inputs=[draft_box, meta_state], outputs=[approve_status, cadence_view])
-        discard_btn.click(lambda: ("Draft discarded.", "", {}), outputs=[draft_status, draft_box, meta_state])
+        discard_btn.click(_on_discard, outputs=[draft_status, draft_box, meta_state, approve_status, cadence_view])
         prep_btn.click(_on_prep, inputs=[prep_company, prep_role], outputs=[prep_view])
 
     return demo
@@ -269,7 +318,12 @@ def build_app() -> gr.Blocks:
 
 def launch() -> None:
     """Serve the wizard. Cloud Run provides $PORT; bind 0.0.0.0 for the container."""
-    build_app().launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", "7860")), show_api=False)
+    build_app().launch(
+        server_name="0.0.0.0",
+        server_port=int(os.environ.get("PORT", "7860")),
+        show_api=False,
+        max_file_size="5mb",  # cap untrusted CSV uploads (memory-exhaustion guard)
+    )
 
 
 if __name__ == "__main__":
