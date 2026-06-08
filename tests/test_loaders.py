@@ -85,3 +85,17 @@ def test_contacts_for_company_is_case_insensitive():
 def test_missing_file_raises():
     with pytest.raises(FileNotFoundError):
         load_companies(ROOT / "does_not_exist.csv")
+
+
+def test_load_contacts_caps_row_count(tmp_path, monkeypatch):
+    """DoS ceiling: a pathological many-row upload is truncated to _MAX_CSV_ROWS, not
+    materialized whole. Mechanism is shared with load_companies (same islice + constant)."""
+    from advocate.data import loaders
+
+    monkeypatch.setattr(loaders, "_MAX_CSV_ROWS", 3)
+    csv_path = tmp_path / "many.csv"
+    rows = "\n".join(f"C{i},Name{i}" for i in range(10))
+    csv_path.write_text("company,contact_name\n" + rows + "\n", encoding="utf-8")
+
+    contacts = loaders.load_contacts(csv_path)
+    assert len(contacts) == 3  # capped, not 10

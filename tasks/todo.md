@@ -38,3 +38,33 @@ Plan: [tasks/plan.md](plan.md) · Budget ~36h · 🔴 demo-critical · 🟡 nice
 
 ---
 **Cut order if behind:** T3.1+T3.2 → Firestore persistence → T1.3 streaming. **Never cut:** T1.4 gate, T2.1 draft approval, T4.3 deployed-SSO smoke.
+
+---
+
+# Sprint — advocate/ui security hardening (2026-06-08)
+
+Source: security-auditor review of `advocate/ui/` (post-merge of #5). Fixing all findings, High → Low.
+Branch: `claude/ui-security-hardening`.
+
+## High
+- [x] **H1** IAP guard added to `_on_draft` + `_on_prep` (`request: gr.Request` + `_iap_blocked`, fail-closed before any grounded call). Regression test asserts source/draft/prep all block when `REQUIRE_IAP=1` and no headers. Verified Gradio resolves the PEP-563 stringized `gr.Request` hint, so injection works.
+- [x] **H2** Row cap (`_MAX_CSV_ROWS=50_000`, via `itertools.islice`) on both loaders. Zero-row rejection + upload-path containment at the UI boundary (`_on_connect`). _Diverged from review: did NOT add `csv.field_size_limit(1_000_000)` — Python's default is already 128KB, so that would have loosened it._
+
+## Medium
+- [x] **M1** `_md_escape` applied to the user-typed `company` in the Prep heading; `replace_citations` now renders non-http(s) targets as plain text (blocks `javascript:`/`data:`/`file:`).
+- [x] **M2** Corrected the overstated "enforced server-side" docstrings in `_on_rank`/`_on_draft` — it's a UX/integrity gate computed from client-supplied state, not an authz boundary. Handler check kept as belt-and-braces.
+- [x] **M3** `_is_safe_upload` confines reads to the system/Gradio temp dir (folded into H2).
+- [x] **M4** `blocked_paths=[repo_root]` on `launch()` so `/file=` can't serve app source/seeded CSVs; comment documents IAP-dependence.
+
+## Low
+- [x] **L1** `gradio` floor raised to `>=5.50.0,<6.0` (validated line); `pip-audit` recommended in the extra's comment (no CI pipeline to add a step to).
+- [x] **L2** CSV formula injection — confirmed no spreadsheet export sink in `ui/`; documented, no code change (per review).
+- [x] **L3** `_on_connect` now returns a fixed generic error and logs the real exception server-side (no `{exc}`/path leak).
+
+## Verify
+- [x] Full suite: **295 passed, 5 skipped** (was 284+5; +11 new tests), `tests/test_pipeline_promotion.py` excluded — it needs the `[agent]`/ADK extra absent from the UI test env.
+
+### Review
+- **What changed:** 2 High, 4 Medium, 3 Low security findings on `advocate/ui/` fixed across `ui/app.py`, `data/loaders.py`, `core/citations.py`, `pyproject.toml` + tests. Lifted `_on_connect` to module level for testability.
+- **Verification:** 11 new unit tests (IAP coverage on all grounded handlers, upload containment/zero-row/no-leak, Markdown escaping, citation scheme restriction, loader row cap). Full suite green (295/5). Confirmed Gradio injects `gr.Request` under PEP-563 and `launch()` accepts `blocked_paths`.
+- **Issues found / deferred:** Full IAP JWT signature verification left as-is (review rated it INFO and "acceptable" since Cloud Run+IAP is the real boundary; presence-check is documented defense-in-depth). Rate-10 gate kept as a UX/integrity control (server-authoritative session state would be a larger refactor for low practical risk, per review option (a)). `test_pipeline_promotion.py` can't run in the UI env (needs ADK).

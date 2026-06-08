@@ -40,7 +40,10 @@ eval = [
 # advocate.* in-process (no /run_sse hop). NOT installed in the lean ADK service image;
 # the UI service builds with `pip install ".[ui]"`. Same isolation rationale as eval.
 ui = [
-    "gradio>=5.0,<6.0",
+    # Floor raised to the validated 5.50 line (excludes older 5.0.x with known file-route
+    # advisories); cap below 6.0 since the next major can break the wizard. Recommend a
+    # periodic `pip-audit` against this extra (no CI pipeline configured yet).
+    "gradio>=5.50.0,<6.0",
 ]
 
 [build-system]

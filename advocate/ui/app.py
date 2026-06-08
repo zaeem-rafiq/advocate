@@ -12,7 +12,9 @@ DRAFT-ONLY guarantee: there is no send capability anywhere in the system. "Appro
 from __future__ import annotations
 
 import functools
+import logging
 import os
+import tempfile
 from datetime import date
 
 import gradio as gr
@@ -20,6 +22,37 @@ import gradio as gr
 from advocate.ui import pipeline
 from advocate.ui.steps import NUM_STEPS, STEPS, visibility_for
 from advocate.ui.theme import ADVOCATE_CSS, advocate_theme
+
+_LOG = logging.getLogger("advocate.ui")
+
+# Markdown control characters. User-typed text rendered inside a gr.Markdown component is
+# escaped through this map so it can't inject links/images/emphasis/HTML/headings/tables
+# (CommonMark backslash-escapes any ASCII punctuation, so the rendered text is unchanged).
+_MD_ESCAPE = str.maketrans({c: "\\" + c for c in "\\`*_{}[]<>()#+!|"})
+
+
+def _md_escape(text) -> str:
+    """Render untrusted free-text literally inside a Markdown component."""
+    return str(text).translate(_MD_ESCAPE)
+
+
+def _is_safe_upload(path: str) -> bool:
+    """Containment guard for an uploaded file path.
+
+    Gradio writes uploads under the system temp dir (or GRADIO_TEMP_DIR). The handler
+    accepts a path *string* in one branch, so without this check a crafted request could
+    point load_contacts at an arbitrary server file (an arbitrary-file-read primitive).
+    Only paths that resolve inside a known upload root are read.
+    """
+    try:
+        real = os.path.realpath(path)
+        roots = [os.path.realpath(tempfile.gettempdir())]
+        gradio_tmp = os.environ.get("GRADIO_TEMP_DIR")
+        if gradio_tmp:
+            roots.append(os.path.realpath(gradio_tmp))
+        return any(real == r or real.startswith(r + os.sep) for r in roots)
+    except Exception:  # noqa: BLE001 — any resolution failure => treat as unsafe
+        return False
 
 _RATE_HEADERS = ["Company", "Sector", "Posting (1-3)", "Alumni", "Your rating (1-5)"]
 _RANK_HEADERS = ["#", "Company", "Sector", "Motivation", "Posting", "Alumni", "Lenses"]
@@ -110,8 +143,9 @@ def _on_rank(rate_rows, records):
     """Parse ratings, apply the rate-10 gate, rank M->P->A, and ENABLE outreach only when unlocked.
 
     Ranking always previews (gate.py never gates the ranking). Only the outreach affordance is
-    gated: when locked, the Draft button is disabled and no company is pre-selected, so the
-    announced lock is real, not cosmetic. The actual draft refusal is enforced again in _on_draft.
+    gated: when locked, the Draft button is disabled and no company is pre-selected, and _on_draft
+    re-checks the gate so it isn't merely a disabled button. This is a UX/integrity gate computed
+    from in-session ratings — not an authorization boundary (that's Cloud Run + IAP).
     """
     motivations = pipeline.rate_rows_to_motivations(rate_rows)
     gate = pipeline.gate_status(records, motivations)
@@ -134,12 +168,18 @@ def _on_rank(rate_rows, records):
     )
 
 
-def _on_draft(company, background, ranked):
+def _on_draft(company, background, ranked, request: gr.Request = None):
     """Find a starter contact for the chosen company, then draft a compliant outreach email.
 
-    Enforces the rate-10 gate server-side (the ranked records carry each org's motivation), so
-    drafting is genuinely refused until 10 orgs are rated — the disabled button is belt-and-braces.
+    Re-checks the rate-10 gate from the in-session ranked state so drafting isn't reachable via
+    the disabled button alone. That gate is a UX/integrity control (the ranked payload is
+    client-supplied), NOT an authorization boundary — the boundary is Cloud Run + IAP, re-asserted
+    here by the fail-closed _iap_blocked check so this grounded (cost-bearing) endpoint can't run
+    unauthenticated if IAP is ever misconfigured.
     """
+    if _iap_blocked(request):
+        return ("⛔ Not authenticated — reach this service through Google sign-in (IAP).",
+                gr.update(value=""), {})
     if not pipeline.gate_status(ranked or [], _ranked_motivations(ranked))["unlocked"]:
         rated = sum(1 for o in (ranked or []) if o.get("motivation") is not None)
         return (f"🔒 Outreach is locked — rate at least {pipeline.OUTREACH_RATING_THRESHOLD} companies on the "
@@ -161,6 +201,24 @@ def _on_draft(company, background, ranked):
               f"{result['word_count']} words, passed compliance. "
               f"Edit freely, then **Approve** (nothing is sent automatically — you send it yourself).")
     return (status, gr.update(value=result["email"]), meta)
+
+
+def _on_connect(f):
+    """Validate an uploaded contacts CSV (display only; demo sourcing uses the seeded data)."""
+    if not f:
+        return "Using the **seeded** connected data for the demo. Set your targets above, then go to **Source**."
+    from advocate.data.loaders import load_contacts
+    path = f if isinstance(f, str) else f.name
+    if not _is_safe_upload(path):
+        return "⚠️ That upload couldn't be read from the expected location. Please re-upload your CSV."
+    try:
+        n = len(load_contacts(path))
+    except Exception:  # noqa: BLE001 — never surface a stack trace or an internal path
+        _LOG.exception("failed to read uploaded contacts CSV")
+        return "⚠️ Couldn't read that CSV. Expected columns like company, contact_name, is_cbs_alum."
+    if n == 0:
+        return "⚠️ That CSV had no contact rows. Check it has a header row plus at least one contact."
+    return f"✅ Read **{n}** contacts from your CSV. (Demo sourcing uses the seeded connected data.)"
 
 
 def _on_approve(draft_text, meta):
@@ -185,8 +243,11 @@ def _on_discard():
     return ("Draft discarded.", "", {}, "", _CADENCE_PLACEHOLDER)
 
 
-def _on_prep(company, role):
+def _on_prep(company, role, request: gr.Request = None):
     """Cited research brief + five TIARA questions for an informational interview."""
+    if _iap_blocked(request):
+        yield "⛔ Not authenticated — reach this service through Google sign-in (IAP)."
+        return
     if not company:
         yield "Pick a ranked company above, or type a company name, then Prepare."
         return
@@ -199,7 +260,7 @@ def _on_prep(company, role):
     elif result.get("depth") == "shallow":
         caveat = "\n\n> ℹ️ Based on limited sources — verify specifics before relying on them."
     questions_md = "\n".join(f"- **{cat}:** {q.get(cat, '')}" for cat in ["Trends", "Insights", "Advice", "Resources", "Assignments"])
-    yield f"### {company} — informational brief\n\n{result.get('brief','')}\n\n### TIARA questions\n{questions_md}{caveat}"
+    yield f"### {_md_escape(company)} — informational brief\n\n{result.get('brief','')}\n\n### TIARA questions\n{questions_md}{caveat}"
 
 
 def build_app() -> gr.Blocks:
@@ -323,15 +384,6 @@ def build_app() -> gr.Blocks:
 
         # ----- wiring -----
         # Connect: validate an uploaded CSV (display only; the demo flow uses the connected seed data).
-        def _on_connect(f):
-            if not f:
-                return "Using the **seeded** connected data for the demo. Set your targets above, then go to **Source**."
-            try:
-                from advocate.data.loaders import load_contacts
-                n = len(load_contacts(f if isinstance(f, str) else f.name))
-                return f"✅ Read **{n}** contacts from your CSV. (Demo sourcing uses the seeded connected data.)"
-            except Exception as exc:  # noqa: BLE001 — surface a friendly error, never a stack trace
-                return f"⚠️ Couldn't read that CSV: {exc}. Expected columns like company, contact_name, is_cbs_alum."
         alumni_csv.change(_on_connect, inputs=[alumni_csv], outputs=[connect_status])
 
         nav_outputs = groups + rail_buttons + [step]
@@ -355,11 +407,17 @@ def build_app() -> gr.Blocks:
 
 def launch() -> None:
     """Serve the wizard. Cloud Run provides $PORT; bind 0.0.0.0 for the container."""
+    # Repo root (parent of the advocate package) — the app's own source + seeded CSVs.
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     build_app().launch(
         server_name="0.0.0.0",
         server_port=int(os.environ.get("PORT", "7860")),
         show_api=False,
         max_file_size="5mb",  # cap untrusted CSV uploads (memory-exhaustion guard)
+        # Authz for every route is Cloud Run + IAP. Defense-in-depth: refuse to serve the
+        # app's own source / seeded CSVs via Gradio's /file= route. Uploads live under the
+        # system temp dir (not repo_root), so they stay readable.
+        blocked_paths=[repo_root],
     )
 
 

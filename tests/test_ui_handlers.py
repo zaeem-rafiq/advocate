@@ -6,6 +6,9 @@ calls (draft/prep/source) are monkeypatched — no Vertex, mirroring test_ui_pip
 """
 from __future__ import annotations
 
+import os
+import tempfile
+
 from advocate.ui import app, pipeline
 
 
@@ -135,3 +138,95 @@ def test_on_source_streams_status_then_results(monkeypatch):
     assert len(out) >= 2  # searching status, then the result
     assert "Searching" in out[0][0]
     assert "Sourced" in out[-1][0] and out[-1][2] == [_rec("Acme")]
+
+
+# ----- IAP fail-closed coverage on EVERY grounded (cost-bearing) endpoint -----
+# Regression for the review's HIGH-1: the guard must cover source AND draft AND prep, so a
+# misconfigured IAP boundary can't leave a grounded Gemini endpoint reachable unauthenticated.
+
+def _unauth():
+    return _FakeRequest({})  # a request carrying no IAP-injected identity
+
+
+def test_on_draft_blocks_unauthenticated_when_iap_required(monkeypatch):
+    monkeypatch.setenv("REQUIRE_IAP", "1")
+    status, _draft, meta = app._on_draft("Acme", "bg", _UNLOCKED, _unauth())
+    assert "not authenticated" in status.lower() and meta == {}
+
+
+def test_on_prep_blocks_unauthenticated_when_iap_required(monkeypatch):
+    monkeypatch.setenv("REQUIRE_IAP", "1")
+    out = list(app._on_prep("Acme", "PM", _unauth()))
+    assert len(out) == 1 and "not authenticated" in out[0].lower()
+
+
+def test_all_grounded_handlers_fail_closed_without_iap(monkeypatch):
+    """source/draft/prep all refuse (before any grounded call) when REQUIRE_IAP is on and absent."""
+    monkeypatch.setenv("REQUIRE_IAP", "1")
+    # If any handler ran its grounded call, these unconfigured pipeline fns would error — proving
+    # the guard short-circuits *before* the cost-bearing path.
+    assert "authenticated" in list(app._on_source("climate", "NYC", "PM", _unauth()))[0][0].lower()
+    assert "authenticated" in app._on_draft("Acme", "bg", _UNLOCKED, _unauth())[0].lower()
+    assert "authenticated" in list(app._on_prep("Acme", "PM", _unauth()))[0].lower()
+
+
+# ----- _on_prep: untrusted output rendering (review MEDIUM-1) -----
+
+def test_on_prep_escapes_user_typed_company_in_heading(monkeypatch):
+    monkeypatch.delenv("REQUIRE_IAP", raising=False)
+    monkeypatch.setattr(pipeline, "prep",
+                        lambda c, r: {"brief": "ok", "questions": {}, "grounded": True, "depth": "deep"})
+    out = list(app._on_prep("Acme [x](javascript:alert(1))", "PM"))
+    final = out[-1]
+    assert "informational brief" in final
+    assert "](javascript:" not in final  # injected Markdown link syntax is neutralized
+
+
+# ----- _on_connect: upload-path containment, zero-row, no-leak error (review HIGH-2/M3/L3) -----
+
+def _temp_csv(rows, header="company,contact_name,is_cbs_alum"):
+    """Write a CSV under the system temp dir (where Gradio puts uploads). Caller removes it."""
+    fd, path = tempfile.mkstemp(suffix=".csv")
+    with os.fdopen(fd, "w", newline="", encoding="utf-8") as fh:
+        fh.write(header + "\n")
+        for r in rows:
+            fh.write(r + "\n")
+    return path
+
+
+def test_on_connect_reads_a_valid_temp_upload():
+    path = _temp_csv(["Acme,Maya,Y", "Globex,Sam,N"])
+    try:
+        assert "Read **2**" in app._on_connect(path)
+    finally:
+        os.remove(path)
+
+
+def test_on_connect_refuses_path_outside_upload_dir():
+    # A crafted path string outside the upload temp dir must be refused, never opened
+    # (otherwise load_contacts becomes an arbitrary-file-read primitive).
+    msg = app._on_connect("/etc/passwd")
+    assert "expected location" in msg.lower()
+
+
+def test_on_connect_rejects_zero_row_csv():
+    path = _temp_csv([])  # header only
+    try:
+        assert "no contact rows" in app._on_connect(path).lower()
+    finally:
+        os.remove(path)
+
+
+def test_on_connect_error_leaks_no_path_or_trace(monkeypatch):
+    path = _temp_csv(["Acme,Maya,Y"])
+
+    def _boom(_p):
+        raise KeyError("company")  # simulate a malformed-CSV parse failure
+
+    monkeypatch.setattr("advocate.data.loaders.load_contacts", _boom)
+    try:
+        msg = app._on_connect(path)
+        assert "couldn't read that csv" in msg.lower()
+        assert path not in msg and "KeyError" not in msg  # no internal path / exception surfaced
+    finally:
+        os.remove(path)
