@@ -70,6 +70,18 @@ def test_contacts_for_company_helper():
     assert all(c.company == "Helio Grid" for c in helio)
 
 
+def test_contacts_for_company_is_case_insensitive():
+    """Matching mirrors casefolded alumni resolution, so a mere case difference
+    can't produce the 'you have an alum, but no contact found' contradiction."""
+    from advocate.data.loaders import contacts_for_company
+
+    contacts = load_contacts(CONTACTS_CSV)
+    canonical = contacts_for_company(contacts, "Helio Grid")
+    assert contacts_for_company(contacts, "helio grid") == canonical
+    assert contacts_for_company(contacts, "HELIO GRID") == canonical
+    assert contacts_for_company(contacts, "  Helio Grid  ") == canonical
+
+
 def test_missing_file_raises():
     with pytest.raises(FileNotFoundError):
         load_companies(ROOT / "does_not_exist.csv")

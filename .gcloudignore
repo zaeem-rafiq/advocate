@@ -1,6 +1,7 @@
 # Build-context excludes for `gcloud run deploy --source .`.
 # The Dockerfile only COPYs: pyproject.toml, README.md, advocate/, agent_apps/,
-# and the two demo CSVs — everything else is upload bloat for Cloud Build.
+# and the four demo CSVs (climate + fintech) — everything else is upload bloat
+# for Cloud Build.
 #
 # NOTE: once this file exists, gcloud no longer auto-reads .gitignore, so we
 # pull it in explicitly and add the heavy dirs it doesn't cover.

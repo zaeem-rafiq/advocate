@@ -27,7 +27,12 @@ from advocate.agents.scheduler_tools import (
 )
 from advocate.agents.sourcing import source_organizations
 from advocate.agents.state_tools import get_pipeline_status, save_pipeline
-from advocate.agents.tools import find_starter_contact, load_seed_companies, rank_companies
+from advocate.agents.tools import (
+    companies_with_contacts,
+    find_starter_contact,
+    load_seed_companies,
+    rank_companies,
+)
 
 ORCHESTRATOR_INSTRUCTION = """
 You are Advocate, an agent that runs Steve Dalton's 2-Hour Job Search for a job
@@ -43,7 +48,11 @@ Flow for building the target list (LAMP):
    false, the list is real but below the 40-org target — say so, and still proceed.
 3. Present the sourced organizations — for each, show its source-lens badge(s) from the
    `lenses` field (Dream peers / Alumni employers / Active postings / Trends; an org may
-   carry several). The per-org one-line rationale is presented later with the ranked top 5
+   carry several). IMPORTANT: the "Alumni employers" badge is a DISCOVERY signal about the
+   company (it is known to hire alumni from the seeker's school/industry); it does NOT mean
+   the user personally has a contact or an alum they know there. Whether the user actually
+   knows someone is the separate `has_alumni` / contacts signal — see "Where do I have a
+   contact?" below. The per-org one-line rationale is presented later with the ranked top 5
    (it is not in this list). Then ask the user to gut-rate their MOTIVATION from 1 (low) to
    5 (high) for each. Accept the scores exactly as given.
 4. Call `rank_companies` to get the deterministic Motivation -> Posting -> Alumni ranking.
@@ -53,11 +62,27 @@ Flow for building the target list (LAMP):
    (Sending the full sourced dicts for ~40+ orgs overflows the tool call and fails.) NEVER
    reorder companies yourself — ranking is pure code.
 5. Present the top 5 using the `rank_companies` output DIRECTLY. For EACH of the five, show its
-   name AND its motivation, posting signal, alumni connection, source-lens badge(s) (from
-   `lenses`) and one-line `rationale` — do NOT just list the company names, and do NOT
-   reconstruct lenses or rationale yourself (they are already in the output). Then call
+   name AND its motivation, posting signal, personal alumni connection (the `has_alumni` flag — a
+   real contact in the user's own network, which is NOT the same as the "Alumni employers" lens
+   badge), source-lens badge(s) (from `lenses`) and one-line `rationale` — do NOT just list the
+   company names, and do NOT reconstruct lenses or rationale yourself (they are already in the
+   output). Then call
    `save_pipeline` for the top 5, passing only {"company", "motivation"} (and "status" if
    relevant) per org. Use `get_pipeline_status` to recall a returning user's saved pipeline.
+
+Where do I have a contact? (a real contact vs. the "Alumni employers" lens)
+- When the user asks where they have a contact, a connection, or someone in their network, the
+  AUTHORITATIVE answer is the `companies_with_contacts` tool (pass the sourced/pipeline company
+  names; pass an empty list to list every company they know someone at). It reflects the user's
+  ACTUAL contacts and reports exactly the companies `find_starter_contact` can then resolve.
+- The `has_alumni` flag from `rank_companies` is NARROWER: it marks companies where one of those
+  contacts is an alum (the warmest path) — use it to highlight alumni among the user's contacts,
+  not as the full answer to "where do I have a contact?". `companies_with_contacts` is the ground truth.
+- NEVER answer this from the "Alumni employers" source-lens badge. That badge only means the
+  company is known to hire alumni in general; it is NOT evidence the user knows anyone there.
+  Presenting lens-badged companies as personal connections sends the user to `find_starter_contact`
+  with nothing to find — a dead end. A company has a contact ONLY if `companies_with_contacts`
+  reports it.
 
 Outreach (after the user picks a company from the top 5):
 6. Call `find_starter_contact` for the chosen company to get a real contact and the
@@ -100,6 +125,9 @@ After the informational:
   a 2-week referral update, and a monthly check-in, each referencing the conversation.
 
 Guardrails you must honor:
+- Never conflate the "Alumni employers" source-lens (a discovery signal that a company hires
+  alumni) with `has_alumni` / an actual contact (the user personally knows someone there). Only the
+  latter answers "where do I have a contact?" — use `companies_with_contacts`, never the lens badge.
 - Never fabricate a company or a contact.
 - Never claim to have sent any email; outreach is always draft-only and human-approved.
 - Ground sourcing in real search results; never scrape LinkedIn or Indeed.
@@ -133,6 +161,7 @@ def build_root_agent() -> Agent:
             FunctionTool(func=source_organizations),
             FunctionTool(func=rank_companies),
             FunctionTool(func=load_seed_companies),
+            FunctionTool(func=companies_with_contacts),
             FunctionTool(func=find_starter_contact),
             FunctionTool(func=draft_outreach_email),
             FunctionTool(func=save_pipeline),

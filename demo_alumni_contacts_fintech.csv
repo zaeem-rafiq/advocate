@@ -1,0 +1,25 @@
+company,company_domain,contact_name,title,function,seniority,cbs_grad_year,location,email,linkedin_handle,is_cbs_alum,response_archetype,response_latency_days,notes
+Ramp,ramp.com,Elena Rossi,Senior Product Manager,Product,Manager,,"New York, NY",elena.rossi@ramp.com,in/elena-rossi-5100,N,Booster,2,synthetic demo record
+Ramp,ramp.com,David Chen,Group Product Manager,Product,Director,,"New York, NY",david.chen@ramp.com,in/david-chen-5101,N,Obligate,10,synthetic demo record
+Chainalysis,chainalysis.com,Aisha Bello,Product Manager,Product,Manager,,"New York, NY",aisha.bello@chainalysis.com,in/aisha-bello-5102,N,Booster,3,synthetic demo record
+Chainalysis,chainalysis.com,Jonas Lindqvist,Director of Product,Product,Director,,"New York, NY",jonas.lindqvist@chainalysis.com,in/jonas-lindqvist-5103,N,Curmudgeon,,synthetic demo record
+Betterment,betterment.com,Nina Castellano,Senior Product Manager,Product,Manager,,"New York, NY",nina.castellano@betterment.com,in/nina-castellano-5104,N,Booster,2,synthetic demo record
+Betterment,betterment.com,Marcus Devlin,Group Product Manager,Product,Director,,"New York, NY",marcus.devlin@betterment.com,in/marcus-devlin-5105,N,Obligate,9,synthetic demo record
+Melio,meliopayments.com,Tomer Baron,Senior Product Manager,Product,Manager,,"New York, NY",tomer.baron@meliopayments.com,in/tomer-baron-5106,N,Booster,1,synthetic demo record
+Melio,meliopayments.com,Rachel Kim,Product Lead,Product,Manager,,"New York, NY",rachel.kim@meliopayments.com,in/rachel-kim-5107,N,Booster,3,synthetic demo record
+Stash,stash.com,Olivia Grant,Product Manager,Product,Manager,,"New York, NY",olivia.grant@stash.com,in/olivia-grant-5108,N,Booster,2,synthetic demo record
+Stash,stash.com,Samuel Otieno,Head of Product,Product,VP,,"New York, NY",samuel.otieno@stash.com,in/samuel-otieno-5109,N,Obligate,12,synthetic demo record
+Axoni,axoni.com,Priyanka Nair,Senior Product Manager,Product,Manager,2020,"New York, NY",priyanka.nair@axoni.com,in/priyanka-nair-5110,Y,Booster,2,synthetic demo record
+Axoni,axoni.com,Greg Sokolov,VP of Product,Product,VP,2016,"New York, NY",greg.sokolov@axoni.com,in/greg-sokolov-5111,Y,Obligate,11,synthetic demo record
+Addition Wealth,additionwealth.com,Hannah Weiss,Head of Product,Product,VP,2018,"New York, NY",hannah.weiss@additionwealth.com,in/hannah-weiss-5112,Y,Booster,1,synthetic demo record
+Addition Wealth,additionwealth.com,Daniel Park,Product Manager,Product,Manager,2022,"New York, NY",daniel.park@additionwealth.com,in/daniel-park-5113,Y,Booster,3,synthetic demo record
+Magna,magna.so,Sofia Mendez,Product Lead,Product,Manager,2021,"New York, NY",sofia.mendez@magna.so,in/sofia-mendez-5114,Y,Curmudgeon,,synthetic demo record
+Magna,magna.so,Aaron Goldstein,Senior Product Manager,Product,Manager,2020,"New York, NY",aaron.goldstein@magna.so,in/aaron-goldstein-5115,Y,Booster,2,synthetic demo record
+AlphaPoint,alphapoint.com,Maria Lopez,Director of Product,Product,Director,2019,"New York, NY",maria.lopez@alphapoint.com,in/maria-lopez-5116,Y,Booster,3,synthetic demo record
+AlphaPoint,alphapoint.com,Kevin Wu,Product Manager,Product,Manager,2023,"New York, NY",kevin.wu@alphapoint.com,in/kevin-wu-5117,Y,Obligate,14,synthetic demo record
+Alkymi,alkymi.io,Leah Bernstein,Senior Product Manager,Product,Manager,2021,"New York, NY",leah.bernstein@alkymi.io,in/leah-bernstein-5118,Y,Booster,2,synthetic demo record
+Alkymi,alkymi.io,Omar Haddad,Head of Product,Product,VP,2018,"New York, NY",omar.haddad@alkymi.io,in/omar-haddad-5119,Y,Obligate,8,synthetic demo record
+ValCtrl,valctrl.com,Grace Liu,Product Manager,Product,Manager,2023,"New York, NY",grace.liu@valctrl.com,in/grace-liu-5120,Y,Booster,1,synthetic demo record
+ValCtrl,valctrl.com,Nathan Brooks,Founding Product Manager,Product,Manager,2020,"New York, NY",nathan.brooks@valctrl.com,in/nathan-brooks-5121,Y,Booster,2,synthetic demo record
+Elayne,elayne.com,Sarah Goldman,Head of Product,Product,VP,2019,"New York, NY",sarah.goldman@elayne.com,in/sarah-goldman-5122,Y,Booster,3,synthetic demo record
+Elayne,elayne.com,James Whitfield,Senior Product Manager,Product,Manager,2021,"New York, NY",james.whitfield@elayne.com,in/james-whitfield-5123,Y,Obligate,10,synthetic demo record

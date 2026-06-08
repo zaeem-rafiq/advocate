@@ -1,5 +1,59 @@
 # Changelog
 
+## 2026-06-08 — Disambiguate the "alumni_employers" lens from an actual contact
+
+The orchestrator conflated two distinct "alumni" signals. **(1)** The `alumni_employers` source LENS is an LLM
+discovery badge in `lenses` meaning "this company is known to hire alumni from the seeker's school/industry"
+(set during grounded sourcing) — it says nothing about the user's own network. **(2)** `has_alumni` / an actual
+contact is set only by matching sourced orgs against the user's contacts CSV — "you personally know someone
+here." When a user asked **"where do I have a contact?"**, the orchestrator listed companies that merely carried
+the *lens* badge as personal connections; `find_starter_contact` then found nothing in the CSV — a confusing
+dead end (observed live: Axoni, Magna, AlphaPoint, Addition Wealth, Alkymi, ValCtrl, Elayne listed as "alumni
+connections", none with a contact).
+
+- **Fix (new tool):** `companies_with_contacts(companies)` — a read-only tool returning which of the given
+  companies actually have a contact in the loaded contacts CSV. It routes through the **same**
+  `contacts_for_company` helper `find_starter_contact` uses, so the two can never disagree for any input
+  (whitespace/case included — both inherit the casefold match from the prior fix). It reports
+  `{company, contact_count, has_alum}`; an empty input list enumerates every company the user knows someone at.
+- **Fix (prompt):** the orchestrator instruction now explicitly separates the lens badge from `has_alumni` / a
+  real contact — step 3 (the badge is a discovery signal, not a personal connection), step 5 (the "alumni
+  connection" shown for the top 5 is the `has_alumni` flag, *not* the lens badge), a dedicated "Where do I have
+  a contact?" section routing such questions to `companies_with_contacts` (authoritative) and demoting
+  `has_alumni` to the alum subset, and a guardrail forbidding the lens badge as the answer.
+- **Tests:** `tests/test_companies_with_contacts.py` (+8) locks the per-input `companies_with_contacts` ⇄
+  `find_starter_contact` invariant across whitespace/case variants, the `has_alum=False` branch, blank/dup
+  dedup, and empty-list enumeration; the tool is added to `GUARDED_TOOLS` (`@tool_safe` boundary).
+  **275 passed, 1 skipped** (3.12 venv). **Deployed advocate-00029-4wm** (100% traffic; SA + 3 env vars +
+  auth-only ingress preserved): anon `GET /list-apps → 403`, authed `→ 200`; a live prod session asked "where
+  do I have a contact?" → the agent called `companies_with_contacts` (count=15 real contact companies) and
+  answered from the contacts source, not the lens badge.
+
+## 2026-06-08 — Demo unblock: industry-matched contact fixtures + case-insensitive contact match
+
+A live **fintech** demo (industry/geo/function = Fintech / New York City / Product Management) sourced 57
+fintech orgs, ranked a top-5, then failed **every** `find_starter_contact` call. Root cause: the only
+contacts fixture loaded was the **climate-sector** demo set (`demo_alumni_contacts.csv` — Helio Grid,
+GridPilot…), and contact lookup is a name match against the loaded contacts CSV (by design — the affiliation
+source is the user's own export, never scraped). Fintech company in, climate file searched, nothing found.
+Not a code fault — an industry mismatch between live sourcing and the static fixture.
+
+- **Fix (demo data):** added a fintech scenario — `demo_alumni_contacts_fintech.csv` (the rated top-5 as
+  deliberate non-alum "shared interest" contacts + the 7 alumni-lens orgs as `is_cbs_alum=Y` warm contacts,
+  2 per company so the day-3 next-contact cadence beat fires) and `demo_target_companies_fintech.csv` (an
+  18-org fintech seed so the offline `load_seed_companies` fallback also stays on-industry if grounding
+  flakes). Selected at runtime via `ADVOCATE_CONTACTS_CSV` / `ADVOCATE_COMPANIES_CSV`; the climate set
+  remains the default. Both ship in the Cloud Run image, so switching scenarios is a no-rebuild
+  `gcloud run services update --update-env-vars` flip.
+- **Fix (latent bug):** `contacts_for_company` matched company names **case-sensitively** while alumni
+  resolution (`resolve_alumni`) matches **casefolded** — so an org could be flagged `has_alumni=True` yet
+  yield no starter contact on a mere case difference. `contacts_for_company` now casefolds (+ strips),
+  removing that contradiction class. +1 regression test (`test_contacts_for_company_is_case_insensitive`);
+  suite 267 passed / 1 skipped.
+- **Known follow-up (not in this change):** the orchestrator prompt conflates the "Alumni employers"
+  source-lens (an LLM discovery badge) with actually having a contact, so it can tell the user
+  "you have alumni at X" for orgs with no contact. Tracked separately; needs a prompt fix + redeploy.
+
 ## 2026-06-07 — Reliability: retry the first sourcing pass before falling back + make app logs observable
 
 `source_organizations` intermittently returned 0 orgs (honest empty → the orchestrator switches to
@@ -371,6 +425,26 @@ passing draft is ever surfaced. Pattern adapted from `google/adk-samples` LLM Au
   gate-as-final-arbiter, bounded-then-surface, multi-revision chaining, no-revise-when-
   first-draft-passes, revise-exception-propagates. Removed the now-dead per-retry branch
   in `_build_prompt` (the reviser supersedes it). 109 passed, 1 skipped.
+
+## 2026-06-07 — Resolved Cloud Trace `PERMISSION_DENIED` (IAM propagation lag, no code change)
+
+Investigated the open Cloud Trace export failure
+(`cloudtrace.traces.patch denied on //logging.googleapis.com/projects/agenticprd`). Root cause was
+**IAM propagation lag**, not a config defect and not the quota/attribution issue the resource string
+suggested.
+
+- **Forensics:** `roles/cloudtrace.agent` was granted to `advocate-run` at `2026-06-06T20:01:24Z`; the
+  exporter's `BatchWriteSpans` flush 403'd `20:01:30Z` (6s later, mid-propagation). All 8 errors are on
+  the single 1.x revision `advocate-00012-n7n` within one minute; none before the grant, none after, none
+  on the current ADK-2.x revision `advocate-00013-vp6`.
+- **The `logging.googleapis.com` container is a red herring** — Cloud Trace reports IAM denials against
+  the shared Cloud Operations / Logging resource container. No `GOOGLE_CLOUD_QUOTA_PROJECT` override is
+  needed (and none was added).
+- **No code or config change.** IAM, API enablement, runtime SA, and the `opentelemetry-exporter-gcp-trace`
+  exporter were all already correct.
+- **Verified on prod `advocate-00013-vp6`:** 9 authenticated `/run` calls (HTTP 200, live agent spans) →
+  zero `cloudtrace.traces.patch` 403s in logs; Cloud Monitoring shows
+  `cloudtrace…BatchWriteSpans → rc=200 ×4, zero denials`. Trace export is healthy.
 
 ## 2026-06-06 — Migrated to Google ADK 2.x (`google-adk` 2.2.0)
 

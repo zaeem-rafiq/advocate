@@ -5,6 +5,66 @@ Format: date · decision · rationale · reversible?
 
 ---
 
+## 2026-06-08 — Prod deploy advocate-00029-4wm (disambiguate the alumni_employers lens from an actual contact) — supersedes 00028
+
+Resolves the open follow-up logged under 00028: the orchestrator conflated the `alumni_employers` source
+LENS (a discovery badge — "this company hires alumni from the seeker's school/industry") with `has_alumni` /
+an actual contact (the user personally knows someone, from their contacts CSV). Asked "where do I have a
+contact?", it listed lens-badged companies as connections, then `find_starter_contact` found nothing — a
+dead end.
+
+- **Ships:** a new read-only tool `companies_with_contacts(companies)` (returns which of the given companies
+  have a contact in the loaded contacts CSV, routed through the SAME `contacts_for_company` helper
+  `find_starter_contact` uses, so the two can never disagree for any input) + orchestrator prompt edits
+  (steps 3 & 5, a dedicated "Where do I have a contact?" section, and a guardrail) that route contact
+  questions to the tool / `has_alumni`, never the lens badge. +8 tests; **275 passed, 1 skipped** (3.12 venv).
+- **Deploy discipline:** committed on the branch, then **rebased onto `origin/main` first** — which had
+  advanced to `23153b7` (the 00028 work) while this was in flight; the stale-base guard caught it. FF push to
+  `origin/main` (`367b60a..8c9dbc0`), then `gcloud run deploy --source .` from the **worktree whose content
+  == `origin/main`** (the primary checkout was behind + dirty — deploying from it would have dropped the
+  fintech/casefold commit, the exact 00024-class regression).
+- **New revision advocate-00029-4wm** serves 100%. SA `advocate-run@…`, the three env vars, and
+  `--no-allow-unauthenticated` all preserved (verified: `ingress=all`, anonymous `GET /list-apps → 403`,
+  authenticated `→ 200 ["advocate_app"]` — the app imported `root_agent` with the new tool cleanly).
+- **Live functional check:** an authenticated prod session asked "which companies do I personally have a
+  contact at?" → the agent called `companies_with_contacts`, which returned `count=15` of real contact
+  companies (Helio Grid, Verdant Mobility, CarbonLedger, …) and the agent answered from the **contacts
+  source**, not the lens badge. (Default = climate fixture; no `ADVOCATE_*` override on the service.)
+- **Rollback:** `gcloud run services update-traffic advocate --region us-central1 --to-revisions advocate-00028-jkc=100`.
+  Reversible? Yes.
+
+---
+
+## 2026-06-08 — Prod deploy advocate-00028-jkc (industry-matched fintech fixtures + case-insensitive contact match) — supersedes 00027
+
+Triggered by a live **fintech** demo where every `find_starter_contact` returned empty: the loaded contacts
+fixture was the **climate** set, so no sourced fintech org matched (contact lookup is a name match against
+the user's contacts export — by design). Deployed `main` @ `23153b7` from the merged tree (committed on the
+branch, **rebased onto `origin/main` first** so the deploy couldn't drop `b26e278` — the stale-base guard;
+FF push to `origin/main`, then `gcloud run deploy --source .` from the worktree whose content == `origin/main`).
+
+- **Ships:** a fintech scenario — `demo_alumni_contacts_fintech.csv` + `demo_target_companies_fintech.csv`,
+  runtime-selected via `ADVOCATE_CONTACTS_CSV` / `ADVOCATE_COMPANIES_CSV`. Both CSVs are baked into the
+  image; **climate remains the default** (no `ADVOCATE_*` override on the service), preserving the recorded
+  Priya/climate demo. Also fixes `contacts_for_company` to casefold-match (was case-sensitive while
+  `resolve_alumni` casefolds — an org could be `has_alumni=True` yet yield no contact). +1 regression test.
+- **Pre-deploy review:** a 4-way adversarial pass (code / fixtures / deploy-config / git-safety) — fixtures
+  parse & are consistent (24 contacts / 18 orgs, alumni flags aligned, names match the sourced list, all
+  synthetic); the two flagged footguns (commit CSVs before `--source .`; re-pass all preservation flags)
+  were both handled in-sequence.
+- **New revision advocate-00028-jkc** serves 100%. SA `advocate-run@…`, the three env vars, and
+  `--no-allow-unauthenticated` all preserved (verified: `ingress=all`, anonymous `GET /list-apps → 403`,
+  authenticated `→ 200 ["advocate_app"]`). Build COPY of all four CSVs succeeded → fintech fixtures are in
+  the image.
+- **Fintech flip (no rebuild):** `gcloud run services update advocate --region us-central1 --project
+  agenticprd --update-env-vars ADVOCATE_CONTACTS_CSV=demo_alumni_contacts_fintech.csv,ADVOCATE_COMPANIES_CSV=demo_target_companies_fintech.csv`
+  — revert with `--remove-env-vars ADVOCATE_CONTACTS_CSV,ADVOCATE_COMPANIES_CSV`.
+- **Rollback:** `gcloud run services update-traffic advocate --region us-central1 --to-revisions advocate-00027-mn8=100`.
+- **Open follow-up:** orchestrator prompt conflates the "Alumni employers" lens with actually having a
+  contact (separate task; prompt fix + redeploy). Reversible? Yes.
+
+---
+
 ## 2026-06-07 — Prod deploy advocate-00027-mn8 (sourcing first-pass retry + observable logs) — supersedes 00026
 
 Deployed `main` @ `0eea171` from the merged tree (FF push to `origin/main`, then `gcloud run deploy
@@ -216,21 +276,25 @@ on the request path imports it). Reversible: yes (roll traffic back to a prior r
   smoke passed: authenticated `GET /list-apps → 200 ["advocate_app"]`. Added a `.gcloudignore`
   (`#!include:.gitignore` + `.claude/ .git/ docs/ tests/ …`) so `--source` no longer uploads the 123M
   `.claude/` worktree tree / venvs to Cloud Build.
-- **RESOLVED — the Cloud Trace `PERMISSION_DENIED` was the pre-migration revision only.** The
-  `Permission 'cloudtrace.traces.patch' denied` errors were all logged by the OLD revision
-  `advocate-00012-n7n` during agent activity (verified via `gcloud logging read` filtered by
-  revision). On the live 2.x revision `advocate-00013-vp6`, a real agent `/run` produced **zero**
-  trace-export errors (verified; logs confirmed flowing). The export path is identical across versions
-  (`get_fast_api_app(trace_to_cloud=True)`, `otel_to_cloud` default `False` → the `CloudTraceSpanExporter`
-  branch at `fast_api.py:587` runs), so the difference is environmental, not code: the slice-9
-  `roles/cloudtrace.agent` grant was evidently not yet effective for `00012`'s runtime credentials, and
-  the fresh `00013` redeploy picked up the now-effective role — i.e. the ADK 2.x migration redeploy
-  incidentally fixed it. IAM/API confirmed correct (role includes `cloudtrace.traces.patch`,
-  unconditional; no deny policy; API enabled). Caveat: positive span listing via the legacy
-  `listTraces` v1 API returned 0 even after an indexing wait (a known v1 quirk) — eyeball the Cloud
-  Trace console (Trace Explorer) for `agenticprd` if you want visual confirmation of spans. (Correcting
-  the record: my earlier "the deployed 2.x build is failing trace export" was a misattribution of the
-  old revision's drain-window logs surfaced by `logs read` on an idle service.)
+- **RESOLVED — Cloud Trace `PERMISSION_DENIED` was IAM propagation lag, not a config defect.**
+  Forensics: admin audit log shows `roles/cloudtrace.agent` was ADDed to `advocate-run` at
+  `2026-06-06T20:01:24Z`; the exporter's `BatchWriteSpans` flush fired `2026-06-06T20:01:30Z` —
+  **6 seconds later**, inside the IAM propagation window. All **8** occurrences of
+  `cloudtrace.traces.patch denied` are on the single 1.x revision `advocate-00012-n7n` within the one
+  minute `20:01`; zero before the grant, zero after, zero on the ADK-2.x revision `advocate-00013-vp6`.
+  The `//logging.googleapis.com/projects/agenticprd` resource container is a Cloud Trace IAM-error
+  reporting quirk (Cloud Trace shares the Cloud Operations control plane with Cloud Logging) — **not** a
+  quota/billing-project misattribution; `GOOGLE_CLOUD_QUOTA_PROJECT` is not needed and was not set.
+  IAM/API config was correct all along (API enabled, `cloudtrace.agent` granted with no IAM condition,
+  runtime SA = `advocate-run`). **No code or config fix required.**
+  - **Verified clean on prod `advocate-00013-vp6`** (2026-06-07): drove 9 authenticated `/run` calls
+    (all HTTP 200, real Gemini-2.5-Flash agent spans). Result: **zero** `cloudtrace.traces.patch` 403s in
+    Cloud Run logs, and Cloud Monitoring `serviceruntime.googleapis.com/api/request_count` for
+    `cloudtrace.googleapis.com` shows `…TraceService.BatchWriteSpans` → **rc=200 ×4, zero denials** — the
+    runtime SA is now writing spans to Cloud Trace successfully. (The Trace v1 *list* API lags by minutes
+    on indexing; the BatchWriteSpans=200 server-side metric is the authoritative confirmation.)
+  - **Operational note:** when first granting a trace/IAM role to a fresh SA, allow a few minutes for
+    IAM propagation before trusting trace export — an immediate post-grant flush can 403 transiently.
 
 ## 2026-06-07 — Iterative cited TIARA research pipeline
 

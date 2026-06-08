@@ -21,12 +21,18 @@ from advocate.agents.scheduler_tools import (
 )
 from advocate.agents.sourcing import source_organizations
 from advocate.agents.state_tools import get_pipeline_status, save_pipeline
-from advocate.agents.tools import find_starter_contact, load_seed_companies, rank_companies
+from advocate.agents.tools import (
+    companies_with_contacts,
+    find_starter_contact,
+    load_seed_companies,
+    rank_companies,
+)
 
 # Every tool that touches Gemini / Firestore / CSV IO or parses LLM-supplied input.
 GUARDED_TOOLS = [
     rank_companies,
     load_seed_companies,
+    companies_with_contacts,
     find_starter_contact,
     save_pipeline,
     get_pipeline_status,
