@@ -22,3 +22,7 @@ orchestrator-data/
 # image. `.gcloudignore` does `#!include:.gitignore`, so listing it here also keeps a
 # `gcloud run deploy --source .` build context clean (e.g. agent_apps/<app>/.adk/).
 .adk/
+# local UI verification artifacts (Playwright MCP screenshots + scratch) — never commit
+.playwright-mcp/
+/a11y-*.png
+/dr-*.png
