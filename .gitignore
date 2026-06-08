@@ -13,6 +13,9 @@ htmlcov/
 service-account*.json
 .DS_Store
 .claude/skill-usage.log
+# agent-skills hook runtime caches (never commit)
+.claude/sdd-cache/
+.claude/.simplify-ignore-cache/
 uv.lock
 orchestrator-data/
 # ADK local runtime cache (per-app session/state) — must never ship in the Cloud Run
