@@ -92,7 +92,7 @@ def _on_connect(f):
 def _masthead_html() -> str:
     return (
         '<header class="masthead"><div class="masthead-top">'
-        '<div class="wordmark"><span class="glyph-a">A</span>dvocate<span class="dot">.</span></div>'
+        '<h1 class="wordmark"><span class="glyph-a">A</span>dvocate<span class="dot">.</span></h1>'
         '<div class="masthead-meta"><div class="issue">The two-hour job search</div>'
         '<div class="vol">A guided sprint</div></div></div>'
         '<p class="tagline">Stop applying into the void. We help you find the few employers worth your '
@@ -140,7 +140,6 @@ def _rate_html(records: list, ratings: dict | None = None) -> str:
         f'<div class="measure"><span style="width:{pct:.0f}%"></span></div>'
         '</div></div>'
     )
-    buttons = "".join(f'<button aria-label="{n}">{n}</button>' for n in range(1, 6))
     rows = []
     cursor_placed = False  # the first unrated row gets the .empty "your turn" focal cue
     for i, r in enumerate(records, 1):
@@ -152,6 +151,13 @@ def _rate_html(records: list, ratings: dict | None = None) -> str:
         else:
             alum = '<span class="alum no">No alum yet · <span class="who">cold intro</span></span>'
         val = ratings.get(r["company"])
+        # Per-row radios so the chosen score is exposed to assistive tech (aria-checked);
+        # the cumulative oxblood fill is CSS (data-val + nth-child), this is the parallel a11y state.
+        buttons = "".join(
+            f'<button role="radio" aria-checked="{"true" if val == n else "false"}" '
+            f'aria-label="{n} out of 5">{n}</button>'
+            for n in range(1, 6)
+        )
         if val in (1, 2, 3, 4, 5):
             rater_cls, data_val, cell_cls, hint = "rater", f' data-val="{val}"', " done", ("Top pick" if val >= 5 else "Rated")
         elif not cursor_placed:
@@ -166,7 +172,7 @@ def _rate_html(records: list, ratings: dict | None = None) -> str:
             f'<span class="bars {pcls}"><i></i><i></i><i></i></span><span class="val">{plabel}</span></span>'
             f'{alum}</div></div>'
             f'<div class="rate-cell{cell_cls}">'
-            f'<div class="{rater_cls}" data-company="{co}"{data_val} role="group" aria-label="Rate {co}">{buttons}</div>'
+            f'<div class="{rater_cls}" data-company="{co}"{data_val} role="radiogroup" aria-label="Rate {co}">{buttons}</div>'
             f'<div class="hint">{hint}</div></div></article>'
         )
     return head + '<div class="roster">' + "".join(rows) + '</div>'

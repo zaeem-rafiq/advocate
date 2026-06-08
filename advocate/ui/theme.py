@@ -103,6 +103,9 @@ ADVOCATE_JS = r"""
     if (idx < 1) return;
     rater.classList.remove('empty');
     rater.setAttribute('data-val', String(idx));
+    rater.querySelectorAll('button').forEach(function (b, i) {
+      b.setAttribute('aria-checked', (i + 1) === idx ? 'true' : 'false');
+    });
     const cell = rater.closest('.rate-cell');
     if (cell) {
       cell.classList.add('done');
@@ -118,7 +121,7 @@ ADVOCATE_JS = r"""
 ADVOCATE_CSS = r"""
 :root {
   --paper: #f7f4ee; --paper-card: #fdfbf6; --paper-sunk: #f1ede4;
-  --ink: #1c1a17; --ink-soft: #4a463f; --ink-faint: #8a847a; --ink-ghost: #b6afa3;
+  --ink: #1c1a17; --ink-soft: #4a463f; --ink-faint: #68635c; --ink-ghost: #736e67;
   --rule: #e2dccf; --rule-strong: #cfc7b6;
   --accent: #9a2b1e; --accent-deep: #7d2218; --accent-tint: #f0e3df;
   --affirm: #3f6149; --affirm-tint: #e6ece6;
@@ -154,7 +157,7 @@ footer { display: none !important; }
 /* ---------- MASTHEAD ---------- */
 #adv-masthead .masthead { padding: 44px 0 26px; border-bottom: 1.5px solid var(--ink); }
 .masthead-top { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; }
-.wordmark { font-family: var(--serif); font-optical-sizing: auto; font-weight: 480; font-size: 40px; letter-spacing: -.022em; color: var(--ink); line-height: 1; display: inline-flex; align-items: baseline; }
+.wordmark { font-family: var(--serif); font-optical-sizing: auto; font-weight: 480; font-size: 40px; letter-spacing: -.022em; color: var(--ink); line-height: 1; display: inline-flex; align-items: baseline; margin: 0; }
 .wordmark .glyph-a { font-weight: 560; }
 .wordmark .dot { color: var(--accent); font-weight: 560; margin-left: 1px; }
 .masthead-meta { text-align: right; line-height: 1.4; }

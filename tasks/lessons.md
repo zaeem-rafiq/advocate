@@ -1,5 +1,21 @@
 # Lessons
 
+## 2026-06-08 — editing absolute MAIN-repo paths from a WORKTREE session lands changes in the wrong checkout
+- **What went wrong:** Session ran in the git worktree (`.claude/worktrees/wizardly-chatterjee-638b85`,
+  branch `claude/wizardly-chatterjee-638b85`), but my Edit calls used absolute MAIN-repo paths
+  (`/Users/zaeemkhan/Documents/Advocate/advocate/ui/...`). That repo is a *separate* checkout on a
+  *different* branch (`claude/editorial-redesign`), so the edits landed there. The seed-mode server runs
+  with cwd = worktree, so `python -m advocate.ui` loaded the worktree's (unedited) package and served STALE
+  code — the browser re-scan showed `role="group"` / old tokens / no `<h1>` even though "my files" had the
+  fix. Wasted a relaunch + re-scan diagnosing it.
+- **What to do instead:** In a worktree session, operate on worktree paths only. Before editing, anchor to
+  the worktree root (this repo has ~14 concurrent worktrees, all sharing one `.venv` editable-installed from
+  MAIN). Quick guard: after an edit meant to change runtime behavior, confirm the SERVED artifact changed
+  (`curl | grep` the token, or assert the new markup in-browser) before trusting the file diff. If edits
+  already went to the wrong checkout, transfer with `git -C <main> diff > p.patch && git -C <worktree> apply
+  p.patch && git -C <main> checkout -- <files>` rather than re-typing. (Relates to the worktree branching
+  gotchas in the `advocate-ui-gradio-service` / `deploy-from-merged-main` memories.)
+
 ## 2026-06-07 — a grounding/citation signal proven on PROSE doesn't transfer to STRUCTURED output
 - **What went wrong:** Reused prep's grounding honesty-guard (`collect_sources` over
   `grounding_chunks`) for `source_organizations`. prep emits cited PROSE (chunks/supports tie to

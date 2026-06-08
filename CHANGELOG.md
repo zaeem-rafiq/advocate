@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-06-08 — Accessibility: WCAG AA contrast + masthead h1 + rater radiogroup
+
+Closed the three app-owned a11y findings from a fresh WCAG 2 A/AA re-scan of the editorial redesign (the old
+`gr.Dataframe` framework violations were already gone — the custom roster replaced it). No behavior change;
+the rate-10 gate, draft-only guarantee, and all security hardening are untouched.
+
+- **Contrast (the WCAG AA failure):** the two lightest ink tokens were sub-AA on `--paper #f7f4ee` —
+  `--ink-faint #8a847a` (3.38:1) and `--ink-ghost #b6afa3` (1.98:1), used for sector/signal labels, rater
+  digits, eyebrows, rank numbers, the "/10 rated" counter, and inactive step-rail labels. Darkened to
+  `#68635c` (5.43:1) and `#736e67` (4.60:1) — hue preserved, hierarchy intact (soft 8.54 > faint 5.43 >
+  ghost 4.60). Re-scan: **337 text nodes, 0 contrast failures** (was 228). Editorial feel unchanged.
+- **Masthead `<h1>`:** the "Advocate." wordmark was styled `<div>`s (page had no `<h1>`); now `<h1 class=
+  "wordmark">` with a `margin:0` guard so layout is identical. Fixes heading hierarchy / `page-has-heading-one`.
+- **Rater exposes its value to assistive tech:** the 1–5 segmented rater was `role="group"` with unlabeled
+  state (selection was color-only — WCAG 4.1.2 + 1.4.1). Now `role="radiogroup"` + `role="radio"` +
+  `aria-label="N out of 5"` + `aria-checked` per segment, server-rendered from the saved value and updated by
+  the JS bridge on live click. The cumulative oxblood fill is unchanged (CSS).
+
+Verified: Playwright drove the full flow in a real browser — `<h1>` present, 24 radiogroups, live click sets
+`aria-checked` on the selected radio only, contrast re-scan clean. `/design-review` PASS (0 anti-slop
+triggers). **310 passed, 1 skipped.** Files: `advocate/ui/{theme.py,app.py}`, `tasks/STATUS.md`.
+
 ## 2026-06-08 — Redesign: the Guided Sprint UI as an editorial "ink-on-paper" product
 
 The Gradio UI was clean but read as a generic form wizard ("nowhere near what Apple would ship").
