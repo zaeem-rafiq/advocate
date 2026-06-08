@@ -11,6 +11,7 @@ capture the full records — `session_state` is duck-typed, so no ADK is involve
 """
 from __future__ import annotations
 
+import json
 from datetime import date
 from typing import Any, Dict, List, Optional
 
@@ -145,33 +146,30 @@ def cadence_action(outreach_iso: str, today_iso: str, responded: bool) -> dict:
     return {"action": d.action.value, "elapsed": d.business_days_elapsed}
 
 
-# --- display-row transforms for the Rate-step dataframe (kept pure + testable) ---
+# --- rating capture for the custom Rate roster (kept pure + testable) ---
 
-# Status label, not colour alone (a11y): alumni shown as text.
-def records_to_rate_rows(records: List[dict]) -> List[list]:
-    """Sourced records -> editable dataframe rows: [company, sector, posting, alumni, rating]."""
-    return [
-        [r["company"], r.get("sector", ""), int(r.get("posting_score", 0) or 0),
-         "yes" if r.get("has_alumni") else "no", None]
-        for r in records
-    ]
+def parse_ratings(ratings_json: str) -> Dict[str, int]:
+    """Parse the hidden-field JSON the roster's rater bridge writes -> {company: 1..5}.
 
-
-def rate_rows_to_motivations(rows: List[list]) -> Dict[str, Optional[int]]:
-    """Parse the edited rate-table rows into {company: motivation}. Only 1-5 counts as rated.
-
-    The rating is the last column; blanks / out-of-range / non-numeric => unrated (None),
-    so a stray keystroke never fabricates a score or crashes the gate.
+    The bridge serializes {company: score} from the DOM; we trust nothing — malformed JSON,
+    non-numeric scores, and out-of-range values are dropped, so a tampered field can never
+    fabricate a rating or crash the gate. Only an explicit 1–5 counts as a rating.
     """
-    out: Dict[str, Optional[int]] = {}
-    for row in rows or []:
-        if not row or not str(row[0]).strip():
+    try:
+        raw = json.loads(ratings_json or "{}")
+    except (TypeError, ValueError):
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    out: Dict[str, int] = {}
+    for company, score in raw.items():
+        name = str(company).strip()
+        if not name:
             continue
-        company = str(row[0]).strip()
-        raw = row[-1]
         try:
-            score = int(raw)
+            val = int(score)
         except (TypeError, ValueError):
-            score = None
-        out[company] = score if score in (1, 2, 3, 4, 5) else None
+            continue
+        if val in (1, 2, 3, 4, 5):
+            out[name] = val
     return out

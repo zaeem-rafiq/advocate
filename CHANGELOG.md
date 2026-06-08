@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-06-08 — Redesign: the Guided Sprint UI as an editorial "ink-on-paper" product
+
+The Gradio UI was clean but read as a generic form wizard ("nowhere near what Apple would ship").
+This is a ground-up **visual redesign** to a magazine-grade editorial language, chosen from four
+rendered Apple-grade directions (A — Editorial · B — Soft Material Depth · C — Precise Monochrome ·
+D — Warm Humane). No agent/pipeline behavior changed; the rate-10 gate, draft-only guarantee, and
+all security hardening are preserved.
+
+- **Design system** (`theme.py`, full rewrite): Fraunces serif masthead + Newsreader reading face +
+  Inter labels; warm near-monochrome **paper** surfaces; a single **oxblood** accent (#9a2b1e) + a
+  muted-forest affirmative. A hairline step **ledger** (numbered, current/done states) replaces the
+  pill rail; editorial section heads; a typeset-letter draft; a colophon footer. Fonts via `head=`.
+- **Rate is no longer a spreadsheet.** The `gr.Dataframe` is replaced by a custom **gr.HTML roster**
+  of hairline rows — company, sector, typographic posting-strength bars, in-network signal, and a
+  segmented **1–5 rater** that fills cumulatively. Clicking a rater (no Gradio binding) is captured
+  by a load-time **JS bridge** (`theme.ADVOCATE_JS`, `innerHTML`-free) that writes the
+  `{company: score}` map into a hidden field `_on_rank` reads; `pipeline.parse_ratings` replaces the
+  dataframe parsers (untrusted-JSON-safe). The Active Five and the connect form are restyled to match.
+- **Responsive + a11y:** centered `min(1040px, 100vw)` column; the ledger scrolls and the roster
+  reflows on mobile; visible `:focus-visible` ring; `prefers-reduced-motion` honored.
+
+Verified: Playwright drove the full flow at **desktop 1280 + mobile 390** — Connect → Source →
+Rate (rated the roster, the JS bridge persisted all 10 scores to the hidden field) → gate unlocked →
+Active Five ranked correctly → Outreach letter + action group. **311 passed, 1 skipped** (incl. the
+11 security-hardening tests, all preserved). Files: `advocate/ui/{theme.py,app.py,pipeline.py}`,
+`tests/test_ui_{handlers,pipeline}.py`.
+
 ## 2026-06-08 — Security hardening of the Gradio UI (`advocate/ui/`)
 
 Fixed all findings from a security-auditor review of the newly-merged Guided Sprint UI (0 critical;

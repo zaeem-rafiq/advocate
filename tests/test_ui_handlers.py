@@ -6,6 +6,7 @@ calls (draft/prep/source) are monkeypatched — no Vertex, mirroring test_ui_pip
 """
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 
@@ -22,8 +23,8 @@ def _rec(company, posting=2, alum=False):
 
 def test_on_rank_locked_below_threshold():
     records = [_rec(f"C{i}") for i in range(12)]
-    rows = [[f"C{i}", "Climate", 2, "no", (3 if i < 3 else 0)] for i in range(12)]  # 3 rated
-    msg, ranked, _df, _outreach, _prep, draft_btn = app._on_rank(rows, records)
+    ratings = json.dumps({f"C{i}": 3 for i in range(3)})  # 3 rated, via the hidden-field JSON
+    msg, ranked, _html, _outreach, _prep, draft_btn = app._on_rank(ratings, records)
     assert "locked" in msg.lower()
     assert "7" in msg and "more to unlock" in msg.lower()  # 10 - 3 = 7 remaining
     assert len(ranked) == 12
@@ -32,16 +33,16 @@ def test_on_rank_locked_below_threshold():
 
 def test_on_rank_unlocked_at_threshold():
     records = [_rec(f"C{i}") for i in range(12)]
-    rows = [[f"C{i}", "Climate", 2, "no", (4 if i < 10 else 0)] for i in range(12)]  # 10 rated
-    msg, ranked, _df, _outreach, _prep, draft_btn = app._on_rank(rows, records)
+    ratings = json.dumps({f"C{i}": 4 for i in range(10)})  # 10 rated
+    msg, ranked, _html, _outreach, _prep, draft_btn = app._on_rank(ratings, records)
     assert "unlocked" in msg.lower()
     assert ranked[0]["motivation"] == 4  # a rated org sorts to the top
     assert draft_btn.get("interactive") is True  # Draft button enabled once unlocked
 
 
 def test_on_discard_resets_downstream_state():
-    status, draft, meta, approve_status, cadence = app._on_discard()
-    assert "discarded" in status.lower()
+    head, draft, meta, approve_status, cadence = app._on_discard()
+    assert "draft" in head.lower()  # head card reset to the placeholder
     assert draft == "" and meta == {} and approve_status == ""
     assert cadence == app._CADENCE_PLACEHOLDER  # stale 3B7 schedule cleared
 
@@ -75,7 +76,7 @@ def test_on_draft_non_compliant_shows_error_not_draft(monkeypatch):
                         lambda c: {"found": True, "contact_name": "Maya", "title": "PM", "connection": "alum"})
     monkeypatch.setattr(pipeline, "draft_email", lambda *a: {"passed": False, "error": "too long"})
     status, _draft, meta = app._on_draft("Acme", "bg", _UNLOCKED)
-    assert "Couldn't produce" in status and meta == {}
+    assert "compliant draft" in status.lower() and "regenerate" in status.lower() and meta == {}
 
 
 def test_on_draft_success_sets_meta(monkeypatch):
@@ -133,11 +134,11 @@ def test_on_source_streams_status_then_results(monkeypatch):
     monkeypatch.setattr(pipeline, "source_targets",
                         lambda i, g, f: {"organizations": [_rec("Acme")], "count": 1,
                                          "grounded": True, "met_minimum": False, "fallback": False})
-    monkeypatch.setattr(pipeline, "records_to_rate_rows", lambda recs: [["Acme", "Climate", 2, "no", None]])
     out = list(app._on_source("climate", "NYC", "PM"))
     assert len(out) >= 2  # searching status, then the result
     assert "Searching" in out[0][0]
-    assert "Sourced" in out[-1][0] and out[-1][2] == [_rec("Acme")]
+    # final yield: (note, roster-HTML update, full records, ratings-reset)
+    assert "Sourced" in out[-1][0] and out[-1][2] == [_rec("Acme")] and out[-1][3] == "{}"
 
 
 # ----- IAP fail-closed coverage on EVERY grounded (cost-bearing) endpoint -----
