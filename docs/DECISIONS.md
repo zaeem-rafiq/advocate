@@ -5,6 +5,20 @@ Format: date · decision · rationale · reversible?
 
 ---
 
+## 2026-06-07 — Prod deploy advocate-00026-s78 (model-independent MALFORMED fix) — supersedes 00025
+
+Deployed `main` @ `e135edc` from the merged tree (lesson applied: deploy from merged main, not a
+worktree branch). Ships the two-layer, model-independent guard against `MALFORMED_FUNCTION_CALL`:
+`source_organizations` returns a compact `{company, lenses}` projection (full record stays in the
+stash, re-emerges via `rank_companies`) + orchestrator `tool_config(mode=VALIDATED)` +
+`max_output_tokens=8192`. New revision **advocate-00026-s78** serves 100%; SA `advocate-run@…`, the
+three env vars, and authenticated-only ingress preserved. **Verified live: 4 parallel source→rank
+runs, three full large-list (47/62/64 orgs) — zero MALFORMED, compact returns, minimal rank calls,
+top-5 badges+rationale intact** (4th run sourced 0 — unrelated sourcing nondeterminism). Throwaway
+`verify*`/`e2e` Firestore users cleaned up (72 docs). Reversible: yes (roll traffic to 00025-wt4).
+Observation (separate, pre-existing): grounded sourcing occasionally returns 0 orgs (honest
+empty/fallback) — not the rank bug; worth a future reliability look.
+
 ## 2026-06-07 — Re-deploy advocate-00025-wt4 (integrated: main runtime + eval) — supersedes 00024
 
 Caught after the fact: `advocate-00024-tzg` was built from this worktree branch on a STALE base

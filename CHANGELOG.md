@@ -25,7 +25,11 @@ a 3-agent investigation):
 Files: `agents/sourcing.py` (compact return), `agents/orchestrator.py` (tool_config + step-3 wording),
 `tests/test_sourcing.py` (compact-return + stash assertions, byte-size guard). `load_seed_companies`
 left as-is (small list, no rationale; Layer 2 covers it). Tests +1. **261 passed, 1 skipped.**
-(Live multi-run verification on the new revision to follow.)
+**Verified live on `advocate-00026-s78`:** 4 parallel source→rank runs; three were full large-list
+flows (**47 / 62 / 64 orgs** — the range that used to overflow) and all ranked cleanly with **zero
+`MALFORMED_FUNCTION_CALL`**, compact `{company, lenses}` returns, minimal `{company, motivation}` rank
+calls, and top-5 badges + rationale intact. (The 4th run sourced 0 orgs — unrelated sourcing-side
+nondeterminism, no rank attempted, still no MALFORMED.)
 
 ## 2026-06-07 — Fix: MALFORMED_FUNCTION_CALL on ranking a large org list (S-3 regression)
 
