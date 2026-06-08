@@ -16,6 +16,7 @@ This file is a **routing table**, not a knowledge base. Keep it under 300 lines.
 - Skill descriptions ARE resolvers — they match user intent to procedures automatically. You never have to remember a skill exists.
 - If this file exceeds 300 lines, refactor: extract knowledge into a skill, keep only a pointer here.
 - Load context **on demand**. Don't front-load every convention into the context window.
+- **Vendored skills:** `.claude/` carries Addy Osmani's agent-skills (23 skills, personas, `/spec /plan /build /test /code-simplify /ship`; see `.claude/VENDORED.md`). Use them as *procedures*, but **this file's workflow wins on conflict** — the source of truth for task state stays `tasks/todo.md` and the native shared task list, NOT a separate spec doc. Reach for a skill when its description matches the work (e.g. `/code-simplify`, `test-driven-development`); don't run `/spec`/`/plan` in parallel with the `tasks/todo.md` flow in §"Task Management" — pick one and keep state in `tasks/todo.md`.
 
 ### 1. Plan Mode Default
 
