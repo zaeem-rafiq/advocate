@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-06-08 — Tooling: vendor Addy Osmani's agent-skills into `.claude/` (skills + hooks)
+
+Vendored the open-source [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills) pack
+(MIT, pinned at upstream `c076972`) directly into the repo so Claude Code discovers it in every session
+and it persists across the ephemeral remote containers (a plugin install would not).
+
+- **23 skills** under `.claude/skills/` (spec-driven-development, test-driven-development,
+  code-review-and-quality, security-and-hardening, performance-optimization, source-driven-development,
+  doubt-driven-development, etc.), auto-discovered by `SKILL.md` frontmatter.
+- **3 agent personas** under `.claude/agents/` (code-reviewer, security-auditor, test-engineer).
+- **7 slash commands** under `.claude/commands/` (`/spec`, `/plan`, `/build`, `/test`, `/code-simplify`,
+  `/ship`, plus `review`).
+- **5 reference checklists** under `.claude/references/` (testing, performance, security, accessibility,
+  orchestration patterns).
+- **Hooks wired via `.claude/settings.json`:** `SessionStart` injects the `using-agent-skills` meta-skill;
+  `WebFetch` Pre/Post run the `sdd-cache` HTTP-revalidation cache for source-driven-development;
+  `Read` / `Edit|Write` / `Stop` run `simplify-ignore` block protection for `/code-simplify` (only
+  activates on `simplify-ignore-start` markers, otherwise a no-op).
+
+Hook runtime caches (`.claude/sdd-cache/`, `.claude/.simplify-ignore-cache/`) are gitignored. Upstream's
+own `hooks/` test suites were vendored alongside the scripts. Note: in this remote environment direct
+outbound `curl` returns 403, so `sdd-cache` degrades to a no-op here (it works where direct network is
+allowed); `session-start` and `simplify-ignore` are fully functional. Verified: session-start payload OK,
+simplify-ignore 21/21 tests pass. Attribution + pinned commit recorded in `.claude/VENDORED.md`.
+
+Files: NEW `.claude/skills/` (23 skills), `.claude/agents/` (3 personas + README), `.claude/commands/`
+(7 commands), `.claude/references/` (5 checklists), `.claude/hooks/` (scripts + tests + docs),
+`.claude/settings.json`, `.claude/VENDORED.md`, `.claude/skills/LICENSE`; MODIFIED `.gitignore`
+(ignore hook caches).
+
 ## 2026-06-08 — Feature: Gradio "Guided Sprint" end-user UI (separate Cloud Run service, behind IAP)
 
 Advocate's only surfaces were the ADK dev playground (Google's own debug UI, "not a user-facing UI"),
