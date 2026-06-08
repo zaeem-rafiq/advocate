@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-06-08 — Demo unblock: industry-matched contact fixtures + case-insensitive contact match
+
+A live **fintech** demo (industry/geo/function = Fintech / New York City / Product Management) sourced 57
+fintech orgs, ranked a top-5, then failed **every** `find_starter_contact` call. Root cause: the only
+contacts fixture loaded was the **climate-sector** demo set (`demo_alumni_contacts.csv` — Helio Grid,
+GridPilot…), and contact lookup is a name match against the loaded contacts CSV (by design — the affiliation
+source is the user's own export, never scraped). Fintech company in, climate file searched, nothing found.
+Not a code fault — an industry mismatch between live sourcing and the static fixture.
+
+- **Fix (demo data):** added a fintech scenario — `demo_alumni_contacts_fintech.csv` (the rated top-5 as
+  deliberate non-alum "shared interest" contacts + the 7 alumni-lens orgs as `is_cbs_alum=Y` warm contacts,
+  2 per company so the day-3 next-contact cadence beat fires) and `demo_target_companies_fintech.csv` (an
+  18-org fintech seed so the offline `load_seed_companies` fallback also stays on-industry if grounding
+  flakes). Selected at runtime via `ADVOCATE_CONTACTS_CSV` / `ADVOCATE_COMPANIES_CSV`; the climate set
+  remains the default. Both ship in the Cloud Run image, so switching scenarios is a no-rebuild
+  `gcloud run services update --update-env-vars` flip.
+- **Fix (latent bug):** `contacts_for_company` matched company names **case-sensitively** while alumni
+  resolution (`resolve_alumni`) matches **casefolded** — so an org could be flagged `has_alumni=True` yet
+  yield no starter contact on a mere case difference. `contacts_for_company` now casefolds (+ strips),
+  removing that contradiction class. +1 regression test (`test_contacts_for_company_is_case_insensitive`);
+  suite 267 passed / 1 skipped.
+- **Known follow-up (not in this change):** the orchestrator prompt conflates the "Alumni employers"
+  source-lens (an LLM discovery badge) with actually having a contact, so it can tell the user
+  "you have alumni at X" for orgs with no contact. Tracked separately; needs a prompt fix + redeploy.
+
 ## 2026-06-07 — Reliability: retry the first sourcing pass before falling back + make app logs observable
 
 `source_organizations` intermittently returned 0 orgs (honest empty → the orchestrator switches to

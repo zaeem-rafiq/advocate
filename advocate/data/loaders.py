@@ -94,5 +94,12 @@ def load_contacts(path: PathLike) -> List[Contact]:
 
 
 def contacts_for_company(contacts: List[Contact], company: str) -> List[Contact]:
-    """Filter contacts down to a single company (case-sensitive exact match)."""
-    return [c for c in contacts if c.company == company]
+    """Filter contacts down to a single company, matched case-insensitively.
+
+    Casefold matching mirrors alumni resolution (`resolve_alumni`), which keys on
+    casefolded company names. Without it a company can be flagged
+    `has_alumni=True` (casefold match) yet yield no starter contact here on a mere
+    case difference — the contradiction "you have an alum, but no contact found".
+    """
+    key = company.strip().casefold()
+    return [c for c in contacts if c.company.casefold() == key]

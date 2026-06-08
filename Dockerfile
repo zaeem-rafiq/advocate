@@ -13,10 +13,13 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 RUN pip install --upgrade pip && pip install .
 
-# App code, agent packages, and the seeded/connected CSVs.
+# App code, agent packages, and the seeded/connected CSVs (climate default +
+# fintech scenario; the contacts/companies file is selected at runtime via the
+# ADVOCATE_CONTACTS_CSV / ADVOCATE_COMPANIES_CSV env vars).
 COPY advocate ./advocate
 COPY agent_apps ./agent_apps
-COPY demo_target_companies.csv demo_alumni_contacts.csv ./
+COPY demo_target_companies.csv demo_alumni_contacts.csv \
+     demo_target_companies_fintech.csv demo_alumni_contacts_fintech.csv ./
 
 EXPOSE 8080
 CMD ["python", "-m", "advocate.app"]

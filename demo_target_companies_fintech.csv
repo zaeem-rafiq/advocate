@@ -1,0 +1,19 @@
+company,company_domain,sector,location,has_alumni,demo_posting_score,demo_motivation,notes
+Ramp,ramp.com,Corporate cards / spend mgmt,"New York, NY",N,2,5,posting_score & motivation are demo stand-ins
+Chainalysis,chainalysis.com,Blockchain data / analytics,"New York, NY",N,2,5,posting_score & motivation are demo stand-ins
+Betterment,betterment.com,Robo-advisory / wealth,"New York, NY",N,2,5,posting_score & motivation are demo stand-ins
+Melio,meliopayments.com,B2B payments,"New York, NY",N,2,5,posting_score & motivation are demo stand-ins
+Stash,stash.com,Challenger bank / investing,"New York, NY",N,0,5,posting_score & motivation are demo stand-ins
+Axoni,axoni.com,Capital-markets infrastructure,"New York, NY",Y,0,2,posting_score & motivation are demo stand-ins
+Addition Wealth,additionwealth.com,Financial wellness,"New York, NY",Y,0,2,posting_score & motivation are demo stand-ins
+Magna,magna.so,Token cap-table / equity,"New York, NY",Y,0,2,posting_score & motivation are demo stand-ins
+AlphaPoint,alphapoint.com,Digital-asset infrastructure,"New York, NY",Y,0,2,posting_score & motivation are demo stand-ins
+Alkymi,alkymi.io,Data extraction / automation,"New York, NY",Y,0,2,posting_score & motivation are demo stand-ins
+ValCtrl,valctrl.com,Prediction-market finance,"New York, NY",Y,0,2,posting_score & motivation are demo stand-ins
+Elayne,elayne.com,Estate settlement,"New York, NY",Y,0,2,posting_score & motivation are demo stand-ins
+Plaid,plaid.com,Financial data connectivity,"New York, NY",N,2,3,posting_score & motivation are demo stand-ins
+Brex,brex.com,Corporate cards / spend mgmt,"New York, NY",N,1,3,posting_score & motivation are demo stand-ins
+Capital One,capitalone.com,Banking / financial services,"New York, NY",N,2,3,posting_score & motivation are demo stand-ins
+Fiserv,fiserv.com,Payments / fintech,"New York, NY",N,2,3,posting_score & motivation are demo stand-ins
+Circle,circle.com,Stablecoin / payments,"New York, NY",N,1,2,posting_score & motivation are demo stand-ins
+Gemini,gemini.com,Crypto exchange / custody,"New York, NY",N,0,2,posting_score & motivation are demo stand-ins
