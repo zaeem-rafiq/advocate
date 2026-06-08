@@ -1,6 +1,6 @@
 # Build STATUS — Advocate Gradio UI (autonomous run)
 
-_Last updated: Checkpoint A. Branch: `claude/agitated-kirch-a624f9`._
+_Last updated: full 7-step wizard WIRED + DEPLOYED (Checkpoints A→C substantially). Browser click-through (T4.2) + ship chain pending. Branch: `claude/agitated-kirch-a624f9`._
 
 ## TL;DR for when you're back
 - **Skeleton is built, themed (WCAG-AA light), and DEPLOYED behind IAP** at
@@ -45,9 +45,29 @@ So the planned "import advocate.* in-process" had to become "import the **adk-fr
 `gradio==5.50.0 · google-genai==2.8.0 · google-cloud-firestore==2.27.0` (uv resolve OK). Image:
 `us-central1-docker.pkg.dev/agenticprd/cloud-run-source-deploy/advocate-ui:latest`.
 
+## Progress since Checkpoint A
+| Task | State | Verification |
+|---|---|---|
+| T1.2 pipeline glue | ✅ | 9 unit tests (shim/reconcile, rank, gate, 3B7, rate-parse); **live Vertex sourcing = 52 grounded orgs in ~81s** |
+| T1.1 Connect | ✅ wired | target inputs + alumni-CSV validation (demo uses seeded data — see limitation) |
+| T1.3 Source | ✅ wired | streamed status + seed fallback; live sourcing proven |
+| T1.4 Rate (rate-10 gate) | ✅ wired | editable dataframe; gate logic unit-tested |
+| T1.5 Rank (Active Five) | ✅ wired | M→P→A + company picker; rank logic unit-tested |
+| T2.1 Draft approval | ✅ wired | find_contact→draft→editable box + Approve/Regenerate/Discard; passed=False path handled |
+| T2.2 Approve→3B7 | ✅ wired | schedule_3b7 (business-day dates); DRAFT-ONLY copy |
+| T3.2 Prep (TIARA) | ✅ wired | prepare_informational → brief + 5 questions + grounded/depth caveats |
+| T3.1 3B7 tracker | 🟡 partial | shows the scheduled reminders; the "what's due today?" control (cadence_action, tested) not yet wired |
+| Deploy | ✅ | revision **advocate-ui-00002-7qq** live behind IAP (unauth→302) |
+
+Suite: **278 passed, 1 skipped** (was 266; +12 UI tests). Local serve HTTP 200, app constructs (7 panels/2 dataframes/14 buttons).
+
+## ⚠️ Verified vs PENDING (honest)
+- **Verified:** all step *logic* (unit tests), live grounded sourcing, the app builds + serves, deployed + IAP-gated.
+- **PENDING (needs a browser / your IAP access):** end-to-end **click-through** of the deployed wizard — does clicking Source populate the rate table, does the gate lock, does Approve render the schedule. This is the **T4.2 Playwright/a11y pass**, not yet run. So the flow is "wired + logic-verified + boots," **not yet click-verified in a browser.** Treat the deployed UI as a strong draft, not signed-off.
+- Connect CSV upload is **display/validation only** for the demo — sourcing/contacts use the seeded connected data (`CONTACTS_CSV` is read at import; wiring an uploaded path through needs a small refactor). Flagged, not yet done.
+
 ## Resume point
-**Next: Phase 1 — T1.1 (Step 0 Connect).** In-process call map unchanged; the adk-free modules now import without adk.
-Live Vertex verification runs locally via ADC (present). Rebuild + redeploy the UI image after each phase to reflect new step code.
+**Next:** (1) T4.2 — drive the deployed wizard with Playwright (needs your IAP grant) to click-verify each step + run the WCAG-AA a11y pass + `/design-review` craft gate; (2) wire the T3.1 "what's due today" control; (3) optional: thread an uploaded alumni CSV through sourcing; (4) T4.3 — run `/test → /code-simplify → /review → /ship` for the clean final commit/PR (replaces the `[skip-chain]` WIP commits). Redeploy after each.
 
 ## Commits
 - Checkpoint A committed with `[skip-chain]` (WIP — the full /spec→…→/ship chain runs at T4.2/T4.3 before the final clean commit/PR).
