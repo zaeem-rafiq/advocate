@@ -7,12 +7,20 @@ column contract is the same. Uses csv.DictReader so quoted commas inside fields
 from __future__ import annotations
 
 import csv
+import itertools
 from pathlib import Path
 from typing import List, Optional, Union
 
 from advocate.core.models import Contact, Org
 
 PathLike = Union[str, Path]
+
+# DoS ceiling for untrusted CSV uploads: cap the number of data rows materialized into
+# domain objects. The UI already caps upload size at 5 MB and Python's csv module caps a
+# single field at 128 KB by default, but a 5 MB file of many tiny rows could still build a
+# huge in-memory list. This bound is far above any realistic alumni/target export, so it
+# never truncates legitimate (including seeded) data — it only stops pathological inputs.
+_MAX_CSV_ROWS = 50_000
 
 
 def _to_bool(value: str) -> bool:
@@ -43,7 +51,7 @@ def load_companies(path: PathLike, use_demo_motivation: bool = True) -> List[Org
 
     orgs: List[Org] = []
     with path.open(newline="", encoding="utf-8") as fh:
-        for row in csv.DictReader(fh):
+        for row in itertools.islice(csv.DictReader(fh), _MAX_CSV_ROWS):
             motivation = _to_int(row.get("demo_motivation", "")) if use_demo_motivation else None
             orgs.append(
                 Org(
@@ -72,7 +80,7 @@ def load_contacts(path: PathLike) -> List[Contact]:
 
     contacts: List[Contact] = []
     with path.open(newline="", encoding="utf-8") as fh:
-        for row in csv.DictReader(fh):
+        for row in itertools.islice(csv.DictReader(fh), _MAX_CSV_ROWS):
             contacts.append(
                 Contact(
                     company=row["company"].strip(),

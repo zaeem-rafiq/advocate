@@ -21,8 +21,22 @@ import logging
 import re
 from dataclasses import dataclass
 from typing import Dict, Iterable, Mapping, Tuple
+from urllib.parse import urlparse
 
 _LOG = logging.getLogger("advocate.citations")
+
+
+def _is_http_url(url: str) -> bool:
+    """Only http(s) targets are safe to render as a Markdown link.
+
+    Grounding URLs are third-party-controlled; rendering one verbatim as ``[t](url)``
+    would let a poisoned source inject a ``javascript:`` / ``data:`` link. Anything that
+    isn't http(s) is downgraded to plain text by the caller.
+    """
+    try:
+        return urlparse(url).scheme in ("http", "https")
+    except Exception:  # noqa: BLE001 — an unparseable URL is, by definition, not safe to link
+        return False
 
 # A source whose representative confidence is below this is flagged inline as weakly
 # grounded — Advocate shows thin grounding rather than hiding it. (Also the default used
@@ -176,6 +190,9 @@ def replace_citations(
             _LOG.warning("dropping citation to unknown source %s", short_id)
             return ""
         display = source.title or source.domain or short_id
+        if not _is_http_url(source.url):
+            _LOG.warning("rendering citation %s as text — unsafe URL scheme %r", short_id, source.url)
+            return f" {display}"
         link = f" [{display}]({source.url})"
         if show_confidence and source.confidence < LOW_CONFIDENCE_THRESHOLD:
             link += " (low confidence)"

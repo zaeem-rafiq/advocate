@@ -198,6 +198,25 @@ def test_replace_can_disable_confidence_annotation():
     assert "[Weak](https://w.com)" in out
 
 
+def test_replace_renders_non_http_scheme_as_plain_text_not_link():
+    """A poisoned grounding URL (javascript:/data:/etc.) is never emitted as a link target;
+    the source title is kept as plain text so no information is lost."""
+    for bad in ("javascript:alert(1)", "data:text/html,<script>1</script>", "file:///etc/passwd"):
+        sources = {"src-1": Source("src-1", "Evil", bad, "evil", 0.9)}
+        out = replace_citations('Claim<cite source="src-1"/>.', sources)
+        assert bad.split(":")[0] + ":" not in out  # scheme never reaches the output
+        assert "[Evil](" not in out                 # not rendered as a Markdown link
+        assert "Evil" in out                        # display text preserved
+
+
+def test_replace_still_links_http_and_https():
+    """Regression: legitimate http(s) sources continue to render as Markdown links."""
+    sources = {"src-1": Source("src-1", "OK", "http://ok.com", "ok.com", 0.9),
+               "src-2": Source("src-2", "Sec", "https://sec.com", "sec.com", 0.9)}
+    out = replace_citations('A<cite source="src-1"/> B<cite source="src-2"/>.', sources)
+    assert "[OK](http://ok.com)" in out and "[Sec](https://sec.com)" in out
+
+
 # --- grounding_used: "did the model search?" (covers the structured-JSON case) ----
 
 

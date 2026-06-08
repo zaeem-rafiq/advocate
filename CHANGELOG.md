@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-06-08 — Security hardening of the Gradio UI (`advocate/ui/`)
+
+Fixed all findings from a security-auditor review of the newly-merged Guided Sprint UI (0 critical;
+2 high, 4 medium, 3 low). The architecture was already sound (Cloud Run + IAP boundary, draft-only,
+no shell/SQL/SSRF, ADC secrets); these close defense-in-depth gaps and one authorization-coverage hole.
+
+- **[High] IAP fail-closed guard now covers every grounded endpoint.** It previously protected only
+  `_on_source`; `_on_draft` and `_on_prep` (both make cost-bearing grounded Gemini calls) now take a
+  `gr.Request` and short-circuit via `_iap_blocked` before any LLM call, so a misconfigured IAP boundary
+  can't leave a Vertex-cost path open. (Confirmed Gradio resolves the PEP-563 stringized `gr.Request`
+  hint and injects the request.)
+- **[High] Bounded untrusted CSV parsing.** Added a 50k-row ceiling (`itertools.islice`) to both loaders
+  (the 5 MB upload cap + Python's 128 KB default field limit already covered size/giant-cells), plus
+  zero-row rejection and upload-path containment (`_is_safe_upload`) at the UI boundary so a crafted path
+  string can't turn `load_contacts` into an arbitrary-file-read.
+- **[Medium] Untrusted output rendering.** User-typed `company` is Markdown-escaped in the Prep heading;
+  `replace_citations` renders non-`http(s)` citation targets as plain text (blocks `javascript:`/`data:`/`file:`).
+- **[Medium] Honest gate docstrings.** The rate-10 gate is now documented as a UX/integrity control
+  computed from client-supplied state (not an authz boundary); the handler re-check stays as belt-and-braces.
+- **[Medium] Gradio route lockdown.** `launch()` sets `blocked_paths=[repo_root]` so `/file=` can't serve
+  app source / seeded CSVs (uploads under the temp dir stay readable).
+- **[Low] Supply chain + error hygiene.** `gradio` floor raised to `>=5.50.0,<6.0` (excludes old file-route
+  advisories); `_on_connect` returns a fixed generic error and logs the real exception server-side (no path leak).
+
+Verified: 11 new unit tests; full suite **295 passed, 5 skipped** (ADK-only `test_pipeline_promotion.py`
+excluded — it needs the `[agent]` extra absent from the UI test env). Files: MODIFIED `advocate/ui/app.py`
+(IAP guards, `_md_escape`, `_is_safe_upload`, `_on_connect` lifted to module level, `blocked_paths`),
+`advocate/data/loaders.py` (row cap), `advocate/core/citations.py` (link-scheme guard), `pyproject.toml`
+(gradio floor); NEW tests in `test_ui_handlers.py`, `test_loaders.py`, `test_citations.py`.
+
 ## 2026-06-08 — Tooling: vendor Addy Osmani's agent-skills into `.claude/` (skills + hooks)
 
 Vendored the open-source [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills) pack
