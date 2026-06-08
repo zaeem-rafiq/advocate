@@ -9,17 +9,17 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Install deps first for layer caching.
+# Copy source before install so hatchling can build the advocate wheel, then install the
+# `agent` extra (google-adk + Cloud Trace exporter). adk lives in an extra now because it
+# is dependency-incompatible with the gradio `ui` extra (see pyproject.toml).
 COPY pyproject.toml README.md ./
-RUN pip install --upgrade pip && pip install .
-
-# App code, agent packages, and the seeded/connected CSVs (climate default +
-# fintech scenario; the contacts/companies file is selected at runtime via the
-# ADVOCATE_CONTACTS_CSV / ADVOCATE_COMPANIES_CSV env vars).
 COPY advocate ./advocate
 COPY agent_apps ./agent_apps
+# Seeded/connected CSVs (climate default + fintech scenario; selected at runtime via
+# ADVOCATE_CONTACTS_CSV / ADVOCATE_COMPANIES_CSV).
 COPY demo_target_companies.csv demo_alumni_contacts.csv \
      demo_target_companies_fintech.csv demo_alumni_contacts_fintech.csv ./
+RUN pip install --upgrade pip && pip install ".[agent]"
 
 EXPOSE 8080
 CMD ["python", "-m", "advocate.app"]

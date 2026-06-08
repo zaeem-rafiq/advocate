@@ -8,7 +8,10 @@ from __future__ import annotations
 
 from typing import List
 
-from google.adk.tools.tool_context import ToolContext
+try:  # ToolContext is a type hint only; the in-process UI image runs without google-adk.
+    from google.adk.tools.tool_context import ToolContext
+except ModuleNotFoundError:  # pragma: no cover - exercised only in the adk-free UI image
+    ToolContext = object  # type: ignore[assignment,misc]
 
 from advocate.agents.config import COMPANIES_CSV, CONTACTS_CSV
 from advocate.agents.errors import tool_safe
