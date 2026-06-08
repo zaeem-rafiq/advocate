@@ -1,218 +1,340 @@
-"""WCAG-AA light theme + craft polish for the Advocate wizard.
+"""Editorial "ink-on-paper" design system for the Advocate wizard (Gradio).
 
-Explicitly a LIGHT theme with AA-contrast tokens — the ADK dev UI is dark-locked
-(adk-web issue #7) with no contrast control, which is a Section-508 procurement risk
-for a university buyer. Tokens below are chosen for >= 4.5:1 body text and >= 3:1 UI:
-  - body text  #1f2937 (gray-800) on #ffffff       ~ 12.6:1
-  - primary    #1d4ed8 (blue-700) bg + #ffffff text ~ 7.0:1
-  - accent link #1d4ed8 on #ffffff                  ~ 7.0:1
+A magazine-grade, Apple-bar visual language: a Fraunces serif masthead, a hairline
+step "ledger", warm near-monochrome paper surfaces, a single oxblood accent, and a
+muted-forest affirmative. The Rate step is a custom-rendered roster of hairline rows
+with a segmented 1–5 rater (NOT a spreadsheet); the draft reads as a typeset letter.
 
-Beyond contrast, the CSS turns stock Gradio into something that reads as a finished
-product: a centered max-width column on a soft-slate page, each step rendered as a
-white card (killing Gradio's grey `.gr-group` slab), a refined pill stepper, right-sized
-buttons with a hover lift, a real disabled state, and the framework footer removed. A
-visible :focus-visible ring is never suppressed and prefers-reduced-motion is honored.
+Exports:
+  - advocate_theme()  — a Gradio Base theme so native widgets inherit paper/ink/oxblood.
+  - ADVOCATE_HEAD     — <link> tags loading Fraunces / Newsreader / Inter.
+  - ADVOCATE_CSS      — the full stylesheet (our custom gr.HTML markup + Gradio chrome).
+  - ADVOCATE_JS       — a load-time bridge: clicking a rater writes JSON to a hidden field.
+
+Accessibility: AA-contrast tokens (ink #1c1a17 on paper ~12:1; oxblood #9a2b1e on
+paper ~6.4:1), a never-suppressed :focus-visible ring, and prefers-reduced-motion honored.
 """
 from __future__ import annotations
 
 import gradio as gr
 
-# Brand/accent — blue-700; pairs with white text at AA.
-_PRIMARY = gr.themes.colors.blue
-_NEUTRAL = gr.themes.colors.gray
+_ACCENT = gr.themes.colors.red
+_NEUTRAL = gr.themes.colors.stone
 
 
 def advocate_theme() -> gr.themes.Base:
-    """Construct the light, AA-contrast Advocate theme."""
+    """A light, warm-paper Base theme so Gradio's own widgets inherit the palette."""
     return gr.themes.Base(
-        primary_hue=_PRIMARY,
+        primary_hue=_ACCENT,
         neutral_hue=_NEUTRAL,
-        font=(gr.themes.GoogleFont("Inter"), "system-ui", "sans-serif"),
-        radius_size=gr.themes.sizes.radius_lg,
+        font=(gr.themes.GoogleFont("Fraunces"), "Georgia", "serif"),
+        font_mono=(gr.themes.GoogleFont("Inter"), "ui-sans-serif", "sans-serif"),
     ).set(
-        # Soft-slate page so the white step cards visibly float (depth without dark mode).
-        body_background_fill="#f6f7f9",
-        body_background_fill_dark="#f6f7f9",
-        background_fill_primary="#ffffff",
-        background_fill_secondary="#f8fafc",  # slate-50, subtle panel separation
-        body_text_color="#1f2937",            # gray-800 on white ~12.6:1
-        body_text_color_subdued="#475569",    # slate-600 ~7.5:1 (still AA)
-        block_title_text_color="#0f172a",
-        block_label_text_color="#1f2937",
-        block_border_color="#e6e8ec",
-        input_background_fill="#ffffff",        # crisp white fields, not muddy grey
-        input_background_fill_focus="#ffffff",
-        input_border_color="#d8dce2",
-        input_border_color_focus="#1d4ed8",
-        # Primary action: blue-700 + white text (~7:1).
-        button_primary_background_fill="#1d4ed8",
-        button_primary_background_fill_hover="#1e40af",
-        button_primary_text_color="#ffffff",
-        button_secondary_background_fill="#ffffff",
-        button_secondary_background_fill_hover="#f1f5f9",
-        button_secondary_text_color="#1f2937",
-        button_secondary_border_color="#cbd5e1",
-        button_large_radius="10px",
-        button_small_radius="999px",
-        # Visible focus ring colour (the CSS below enforces it being shown).
-        border_color_accent="#1d4ed8",
+        body_background_fill="#f7f4ee",
+        body_background_fill_dark="#f7f4ee",
+        background_fill_primary="#fdfbf6",
+        background_fill_secondary="#f1ede4",
+        body_text_color="#1c1a17",
+        body_text_color_subdued="#4a463f",
+        block_title_text_color="#1c1a17",
+        block_label_text_color="#4a463f",
+        block_border_color="#e2dccf",
+        block_background_fill="#fdfbf6",
+        input_background_fill="#fdfbf6",
+        input_background_fill_focus="#fdfbf6",
+        input_border_color="#e2dccf",
+        input_border_color_focus="#9a2b1e",
+        button_primary_background_fill="#9a2b1e",
+        button_primary_background_fill_hover="#7d2218",
+        button_primary_text_color="#fdf6f4",
+        button_secondary_background_fill="#fdfbf6",
+        button_secondary_background_fill_hover="#f1ede4",
+        button_secondary_text_color="#1c1a17",
+        button_secondary_border_color="#cfc7b6",
+        border_color_accent="#9a2b1e",
     )
 
 
-# The theme tokens don't reach Gradio's `.gr-group` slab, the framework footer, the
-# full-bleed buttons, or focus/motion guarantees — so those are enforced in CSS.
-ADVOCATE_CSS = """
+# Injected verbatim into <head> — the three families the design is set in.
+ADVOCATE_HEAD = (
+    '<link rel="preconnect" href="https://fonts.googleapis.com" />'
+    '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />'
+    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?'
+    'family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,400&'
+    'family=Newsreader:ital,opsz@0,6..72;1,6..72&'
+    'family=Inter:wght@400;450;500;600&display=swap" />'
+)
+
+
+# Clicking a rater <button> (rendered inside our gr.HTML) has no Gradio binding, so this
+# load-time delegate captures it: it sets the row's data-val, recomputes the {company:score}
+# map from the DOM, writes JSON into the hidden #ratings-json field, and fires `input` so
+# Gradio syncs it to the backend. Stateless (reads the DOM) so it survives roster re-renders.
+# Live count/measure updates use textContent + style only (never innerHTML) — the .c-rated /
+# .l-count nodes are pre-rendered server-side, so there is no HTML injection surface.
+ADVOCATE_JS = r"""
+() => {
+  function syncRatings() {
+    const map = {};
+    document.querySelectorAll('#adv-rate .rater[data-company]').forEach(function (r) {
+      const v = r.getAttribute('data-val');
+      if (v) map[r.getAttribute('data-company')] = Number(v);
+    });
+    const field = document.querySelector('#ratings-json textarea, #ratings-json input');
+    if (field) {
+      field.value = JSON.stringify(map);
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    return map;
+  }
+  function updateProgress(map) {
+    const rated = Object.keys(map).length;
+    const goal = 10;
+    const c = document.querySelector('#adv-rate .c-rated'); if (c) c.textContent = String(rated);
+    const lc = document.querySelector('#adv-rate .l-count'); if (lc) lc.textContent = String(rated);
+    const m = document.querySelector('#adv-rate .measure > span');
+    if (m) m.style.width = Math.min(100, (rated / goal) * 100) + '%';
+  }
+  document.addEventListener('click', function (e) {
+    const btn = e.target.closest('#adv-rate .rater button');
+    if (!btn) return;
+    const rater = btn.closest('.rater');
+    const idx = Array.prototype.indexOf.call(rater.querySelectorAll('button'), btn) + 1;
+    if (idx < 1) return;
+    rater.classList.remove('empty');
+    rater.setAttribute('data-val', String(idx));
+    const cell = rater.closest('.rate-cell');
+    if (cell) {
+      cell.classList.add('done');
+      const hint = cell.querySelector('.hint');
+      if (hint) hint.textContent = idx >= 5 ? 'Top pick' : 'Rated';
+    }
+    updateProgress(syncRatings());
+  });
+}
+"""
+
+
+ADVOCATE_CSS = r"""
 :root {
-  color-scheme: light;
-  --adv-ink: #0f172a;
-  --adv-line: #e6e8ec;
-  --adv-card-shadow: 0 1px 2px rgba(16,24,40,.04), 0 6px 20px rgba(16,24,40,.06);
+  --paper: #f7f4ee; --paper-card: #fdfbf6; --paper-sunk: #f1ede4;
+  --ink: #1c1a17; --ink-soft: #4a463f; --ink-faint: #8a847a; --ink-ghost: #b6afa3;
+  --rule: #e2dccf; --rule-strong: #cfc7b6;
+  --accent: #9a2b1e; --accent-deep: #7d2218; --accent-tint: #f0e3df;
+  --affirm: #3f6149; --affirm-tint: #e6ece6;
+  --shadow-card: 0 1px 2px rgba(40,33,22,.04), 0 8px 24px -14px rgba(40,33,22,.22);
+  --shadow-lift: 0 2px 4px rgba(40,33,22,.05), 0 18px 40px -20px rgba(40,33,22,.30);
+  --serif: "Fraunces", Georgia, "Times New Roman", serif;
+  --read: "Newsreader", Georgia, serif;
+  --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-/* ---- Centered product column on a soft-slate page ---- */
-body, gradio-app, .gradio-container { background: #f6f7f9 !important; }
+/* ---------- canvas + centered column ---------- */
+body, gradio-app, .gradio-container {
+  background: radial-gradient(120% 80% at 50% -8%, #fbf8f2 0%, var(--paper) 55%) fixed !important;
+}
 .gradio-container {
-  /* viewport-relative hard width: caps at 1040 on desktop, forces = viewport on mobile so a
-     content-driven child (the wide table) can't stretch the page. min-width:0 chain below then
-     lets the table scroll inside its own card instead. */
   width: min(1040px, 100vw) !important;
   margin: 0 auto !important;
-  padding: 10px 20px 72px !important;
+  padding: 0 56px 110px !important;
   overflow-x: hidden;
+  color: var(--ink);
+  font-family: var(--sans);
 }
-
-/* ---- Drop the framework footer ("Built with Gradio · Settings") ---- */
-footer { display: none !important; }
-
-/* ---- App header ---- */
-#app-header { margin: 14px 2px 2px; }
-#app-header h1 {
-  font-size: 30px; font-weight: 750; letter-spacing: -0.022em;
-  color: var(--adv-ink); margin: 0 0 2px;
-}
-#app-header p { color: #475569; font-size: 15px; margin: 0; }
-#app-header h1::before {
-  content: ""; display: inline-block; width: 10px; height: 10px;
-  margin-right: 10px; border-radius: 3px; background: #1d4ed8;
-  transform: translateY(-3px);
-}
-
-/* App footer (replaces the removed Gradio one). */
-#app-footer { margin-top: 22px; text-align: center; }
-#app-footer p { color: #94a3b8 !important; font-size: 12.5px !important; }
-
-/* ---- Progress rail: a refined pill stepper (fits on desktop, swipes on mobile) ---- */
-#rail {
-  gap: 8px !important; flex-wrap: nowrap !important; margin: 14px 0 2px !important;
-  overflow-x: auto; padding-bottom: 4px;
-  scrollbar-width: thin;
-}
-#rail.unequal-height { align-items: center; }
-#rail > * { flex: 0 0 auto !important; min-width: 0 !important; }  /* pills keep natural width, never collide */
-.rail-btn {
-  min-width: 0 !important;
-  white-space: nowrap !important;       /* one line per pill -> even heights */
-  border-radius: 999px !important;
-  font-size: 13px !important; font-weight: 600 !important;
-  padding: 7px 15px !important;
-  border: 1px solid #d7dbe2 !important;
-  background: #ffffff !important; color: #475569 !important;
-  box-shadow: none !important; transition: background .12s, border-color .12s, color .12s;
-}
-.rail-btn:hover { background: #eef2ff !important; border-color: #c7d2fe !important; color: #1e3a8a !important; }
-.rail-btn.primary {            /* the active step */
-  background: #1d4ed8 !important; color: #ffffff !important; border-color: #1d4ed8 !important;
-}
-
-/* ---- Each step Group becomes a clean white card (was a grey #e5e7eb slab) ---- */
-.gr-group {
-  background: #ffffff !important;
-  border: 1px solid var(--adv-line) !important;
-  border-radius: 16px !important;
-  box-shadow: var(--adv-card-shadow) !important;
-  padding: 24px 26px !important;
-  margin-top: 14px !important;
-  overflow: hidden;
-  animation: adv-rise .22s ease both;   /* replays when a step toggles display:none->block */
-}
-.gr-group > .styler { background: transparent !important; }
-
-/* Step heading typography inside the card. */
-.gr-group h2 {
-  font-size: 19px !important; font-weight: 700 !important;
-  color: var(--adv-ink) !important; letter-spacing: -0.012em; margin: 0 0 4px !important;
-}
-.gr-group h2 + p, .gr-group .prose p { color: #475569 !important; }
-
-/* ---- Buttons: right-size (no full-bleed bars) + hover lift + real disabled ---- */
-.gr-group button.lg {
-  width: fit-content !important;
-  min-width: 220px;
-  padding: 0 22px !important;
-  font-weight: 600 !important;
-  transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
-}
-.gr-group button.lg.primary { box-shadow: 0 1px 2px rgba(29,78,216,.25); }
-.gr-group button.lg:hover { transform: translateY(-1px); }
-.gr-group button.lg.primary:hover { box-shadow: 0 4px 12px rgba(29,78,216,.28); }
-.gr-group button.lg:disabled,
-.gr-group button.lg[disabled] {
-  background: #eef1f5 !important; color: #8a93a3 !important;
-  border-color: #e6e8ec !important; box-shadow: none !important;
-  cursor: not-allowed !important; transform: none !important;
-}
-/* The Approve / Regenerate / Discard action row reads as one tight, left-aligned group. */
-#action-row { gap: 10px !important; justify-content: flex-start; }
-#action-row > * { flex: 0 0 auto !important; min-width: 0 !important; }
-#action-row button.lg { min-width: auto !important; white-space: nowrap !important; }
-
-/* ---- Helper / hint copy under gated actions ---- */
-.adv-hint { margin-top: 2px; }
-.adv-hint p { color: #64748b !important; font-size: 13.5px !important; }
-
-/* ---- Inputs: firm border on the white card (single-line fields render as <input>) ---- */
-.gr-group textarea { border: 1px solid #d6dae1 !important; border-radius: 10px !important; }
-
-/* ---- Dataframe: Inter (not Gradio's mono) + softer chrome ---- */
-.gr-group table th, .gr-group table td { font-family: 'Inter', system-ui, sans-serif !important; }
-.gr-group table th { font-weight: 600 !important; color: var(--adv-ink) !important; }
-/* On narrow viewports the multi-column table scrolls inside its card, never the whole page.
-   The min-width:0 is the flexbox fix: without it a flex item won't shrink below its content
-   (the 684px table), so the table would push the page wider instead of scrolling internally. */
-.gr-group .table-wrap, .gr-group .table-container {
-  overflow-x: auto !important; max-width: 100% !important; min-width: 0 !important;
-}
-.gr-group .block, .gr-group .column, .gr-group .form { min-width: 0 !important; }
-/* Gradio's `main.fillable` is content-sized; clamp it to the (now hard-bounded) container. */
 main.fillable, .gradio-container > main { width: 100% !important; max-width: 100% !important; min-width: 0 !important; }
+footer { display: none !important; }
+::selection { background: var(--accent-tint); color: var(--accent-deep); }
 
-/* ---- Accessibility: never suppress focus (WCAG 2.4.7) ---- */
-*:focus-visible {
-  outline: 3px solid #1d4ed8 !important;
-  outline-offset: 2px !important;
-  border-radius: 4px;
+/* neutralize Gradio's default block chrome where we want bare editorial surfaces */
+.gradio-container .gap { gap: 0 !important; }
+.adv-bare, .adv-bare > .styler { background: transparent !important; border: none !important; box-shadow: none !important; padding: 0 !important; }
+/* the rater bridge's backing field — kept in the DOM (so JS can write it) but never shown */
+#ratings-json { display: none !important; }
+
+/* ---------- MASTHEAD ---------- */
+#adv-masthead .masthead { padding: 44px 0 26px; border-bottom: 1.5px solid var(--ink); }
+.masthead-top { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; }
+.wordmark { font-family: var(--serif); font-optical-sizing: auto; font-weight: 480; font-size: 40px; letter-spacing: -.022em; color: var(--ink); line-height: 1; display: inline-flex; align-items: baseline; }
+.wordmark .glyph-a { font-weight: 560; }
+.wordmark .dot { color: var(--accent); font-weight: 560; margin-left: 1px; }
+.masthead-meta { text-align: right; line-height: 1.4; }
+.masthead-meta .issue { font-family: var(--read); font-style: italic; font-size: 14px; color: var(--ink-soft); }
+.masthead-meta .vol { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-ghost); margin-top: 3px; }
+.tagline { margin: 14px 0 0; font-family: var(--read); font-size: 19px; line-height: 1.45; color: var(--ink-soft); max-width: 640px; }
+.tagline em { color: var(--accent); font-style: italic; }
+
+/* ---------- STEP LEDGER (the 7 nav buttons, restyled) ---------- */
+#rail {
+  counter-reset: advstep 0;
+  display: flex !important; gap: 0 !important; flex-wrap: nowrap !important;
+  border-bottom: 1px solid var(--rule); padding: 20px 0 0 !important; margin: 0 0 6px !important; overflow-x: auto;
 }
-
-@keyframes adv-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-
-/* ---- Mobile: stack in-card rows (target inputs, action buttons) so they aren't cramped.
-   Scoped to .gr-group so the horizontal scroll rail (#rail, outside cards) is untouched. ---- */
-@media (max-width: 600px) {
-  .gr-group .row { flex-direction: column !important; }
-  #app-header h1 { font-size: 26px; }
+#rail.unequal-height { align-items: stretch; }
+#rail > * { flex: 1 1 0 !important; min-width: 0 !important; }
+.rail-btn {
+  counter-increment: advstep;
+  display: flex !important; flex-direction: column; align-items: flex-start !important; gap: 5px;
+  background: transparent !important; border: none !important; box-shadow: none !important;
+  border-radius: 0 !important; border-bottom: 2.5px solid transparent !important;
+  padding: 0 14px 15px 0 !important; min-width: 0 !important;
+  text-align: left !important; white-space: nowrap; cursor: pointer; transition: border-color .2s, color .2s;
+  font-family: var(--sans) !important; font-size: 14px !important; font-weight: 500 !important; color: var(--ink-ghost) !important; letter-spacing: -.01em;
 }
+.rail-btn::before {
+  content: counter(advstep, decimal-leading-zero);
+  font-family: var(--serif); font-size: 13px; font-weight: 500; letter-spacing: .02em; color: var(--ink-ghost); font-feature-settings: "tnum" 1;
+}
+.rail-btn:hover { color: var(--ink-soft) !important; }
+.rail-btn.primary { color: var(--ink) !important; font-weight: 600 !important; border-bottom-color: var(--accent) !important; }
+.rail-btn.primary::before { color: var(--accent); }
+.rail-btn.step-done { color: var(--ink-soft) !important; border-bottom-color: var(--rule-strong) !important; }
+.rail-btn.step-done::before { color: var(--ink-faint); }
 
-/* ---- Honor reduced-motion: kill the reveal, hover lift, streaming cursor ---- */
+/* ---------- EDITORIAL SECTION HEADS ---------- */
+.sec-head { display: grid; grid-template-columns: 168px 1fr; gap: 0; align-items: start; margin: 56px 0 26px; }
+.sec-index { font-family: var(--serif); font-size: 13px; color: var(--ink-faint); letter-spacing: .02em; padding-top: 9px; }
+.sec-index .rule-no { display: block; font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-ghost); margin-bottom: 4px; }
+.sec-title { font-family: var(--serif); font-optical-sizing: auto; font-weight: 420; font-size: 33px; line-height: 1.08; letter-spacing: -.02em; color: var(--ink); margin: 0; }
+.sec-sub { margin-top: 9px; font-family: var(--read); font-size: 16px; line-height: 1.5; color: var(--ink-soft); max-width: 560px; }
+
+/* ---------- CONNECT FORM (Gradio inputs as editorial fields) ---------- */
+#adv-connect-panel { background: var(--paper-card) !important; border: 1px solid var(--rule) !important; border-radius: 10px !important; box-shadow: var(--shadow-card) !important; padding: 8px 12px !important; overflow: hidden; }
+#adv-connect-panel .block, #adv-connect-panel .form, #adv-connect-panel > .styler { background: transparent !important; border: none !important; box-shadow: none !important; }
+.adv-field, .adv-field > .styler, .adv-field .block, .adv-field .form { background: transparent !important; border: none !important; box-shadow: none !important; }
+.adv-field label > span, .adv-field span[data-testid="block-info"] { font-family: var(--sans) !important; font-size: 12px !important; font-weight: 600 !important; letter-spacing: .04em !important; color: var(--ink-soft) !important; margin-bottom: 8px !important; }
+.adv-field input[type="text"], .adv-field textarea {
+  background: transparent !important; border: none !important; border-radius: 0 !important;
+  border-bottom: 1.5px solid var(--rule-strong) !important; box-shadow: none !important;
+  font-family: var(--serif) !important; font-weight: 380 !important; font-size: 19px !important;
+  letter-spacing: -.01em !important; color: var(--ink) !important; padding: 2px 0 9px !important; transition: border-color .3s cubic-bezier(.2,.7,.2,1);
+}
+.adv-field input::placeholder, .adv-field textarea::placeholder { color: var(--ink-ghost) !important; font-style: italic; }
+.adv-field input:focus, .adv-field textarea:focus { border-bottom-color: var(--accent) !important; outline: none !important; }
+#adv-upload { background: var(--paper-sunk) !important; border: none !important; border-top: 1px solid var(--rule) !important; border-radius: 0 0 10px 10px !important; }
+#adv-upload .wrap, #adv-upload label { font-family: var(--read) !important; color: var(--ink-faint) !important; }
+
+/* ---------- RATE — the hero roster ---------- */
+.rate-progress { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding: 0 2px 18px; border-bottom: 1.5px solid var(--ink); margin-bottom: 4px; }
+.rate-progress .count { font-family: var(--serif); font-weight: 380; font-size: 34px; letter-spacing: -.02em; color: var(--ink); line-height: 1; font-feature-settings: "tnum" 1; }
+.rate-progress .count b { font-weight: 560; color: var(--accent); }
+.rate-progress .count .of { color: var(--ink-ghost); font-weight: 380; }
+.rate-progress .unlock { text-align: right; max-width: 340px; }
+.rate-progress .unlock .line { font-family: var(--read); font-size: 15px; line-height: 1.4; color: var(--ink-soft); }
+.rate-progress .unlock .line b { color: var(--ink); font-weight: 600; }
+.measure { margin-top: 10px; height: 3px; background: var(--rule); border-radius: 2px; overflow: hidden; }
+.measure > span { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 2px; transition: width .4s cubic-bezier(.2,.7,.2,1); }
+
+.roster { padding: 0; }
+.row { display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 22px; padding: 22px 4px; border-bottom: 1px solid var(--rule); transition: background .18s; }
+.row:last-child { border-bottom: none; }
+.row .rank { font-family: var(--serif); font-size: 15px; font-weight: 420; color: var(--ink-ghost); font-feature-settings: "tnum" 1; text-align: right; }
+.row .body { min-width: 0; }
+.row .co { font-family: var(--serif); font-optical-sizing: auto; font-weight: 470; font-size: 22px; letter-spacing: -.018em; color: var(--ink); line-height: 1.12; }
+.row .sector { font-family: var(--read); font-size: 15px; color: var(--ink-faint); margin-top: 2px; }
+.signals { display: flex; align-items: center; gap: 14px; margin-top: 11px; flex-wrap: wrap; }
+.sig { display: inline-flex; align-items: baseline; gap: 7px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; }
+.sig .val { font-family: var(--read); font-style: normal; font-size: 13px; letter-spacing: 0; text-transform: none; font-weight: 500; color: var(--ink-soft); }
+.bars { display: inline-flex; gap: 3px; align-items: center; }
+.bars i { width: 14px; height: 4px; border-radius: 1px; background: var(--rule-strong); display: inline-block; }
+.bars.s-strong i:nth-child(-n+3) { background: var(--ink-soft); }
+.bars.s-some i:nth-child(-n+2) { background: var(--ink-soft); }
+.bars.s-few i:nth-child(-n+1) { background: var(--ink-soft); }
+.alum { display: inline-flex; align-items: baseline; gap: 7px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; font-weight: 600; }
+.alum.yes { color: var(--affirm); }
+.alum.no { color: var(--ink-ghost); }
+.alum .who { font-family: var(--read); font-style: italic; font-weight: 400; font-size: 13.5px; letter-spacing: 0; text-transform: none; }
+
+.rater { display: inline-flex; align-items: stretch; border: 1px solid var(--rule-strong); border-radius: 9px; overflow: hidden; background: var(--paper-card); box-shadow: inset 0 1px 0 rgba(255,255,255,.6); }
+.rater button { appearance: none; border: none; background: transparent; border-left: 1px solid var(--rule); width: 38px; height: 42px; font-family: var(--serif); font-weight: 440; font-size: 17px; color: var(--ink-faint); cursor: pointer; font-feature-settings: "tnum" 1; transition: background .15s, color .15s; }
+.rater button:first-child { border-left: none; }
+.rater button:hover { background: var(--paper-sunk); color: var(--ink); }
+.rater[data-val="5"] button:nth-child(-n+5),
+.rater[data-val="4"] button:nth-child(-n+4),
+.rater[data-val="3"] button:nth-child(-n+3),
+.rater[data-val="2"] button:nth-child(-n+2),
+.rater[data-val="1"] button:nth-child(-n+1) { color: #fff; background: var(--accent); border-left-color: var(--accent-deep); font-weight: 500; }
+.rater[data-val] button:first-child { border-left: none; }
+.rater.empty { border-color: var(--accent); box-shadow: inset 0 1px 0 rgba(255,255,255,.6), 0 0 0 3px var(--accent-tint); }
+.rater.empty button { color: var(--accent-deep); }
+.row:has(.rater.empty) { background: linear-gradient(90deg, rgba(154,43,30,.045), transparent 70%); }
+.rate-cell { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; }
+.rate-cell .hint { font-family: var(--read); font-style: italic; font-size: 12.5px; color: var(--ink-ghost); }
+.rate-cell.done .hint { color: var(--affirm); font-style: normal; font-weight: 500; font-family: var(--sans); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
+.roster-empty { font-family: var(--read); font-style: italic; font-size: 16px; color: var(--ink-faint); padding: 34px 4px; }
+
+/* ---------- RANK — active five (read-only editorial list) ---------- */
+.ranked .row { grid-template-columns: 30px 1fr auto; }
+.ranked .badge { font-family: var(--sans); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; color: var(--accent); }
+.ranked .mot { font-family: var(--serif); font-size: 26px; font-weight: 470; color: var(--ink); line-height: 1; font-feature-settings: "tnum" 1; text-align: right; }
+.ranked .mot .lbl { display: block; font-family: var(--sans); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-ghost); font-weight: 600; margin-top: 5px; }
+.lenses { margin-top: 8px; display: flex; gap: 7px; flex-wrap: wrap; }
+.lens { font-family: var(--sans); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; font-weight: 600; color: var(--ink-faint); border: 1px solid var(--rule-strong); border-radius: 999px; padding: 3px 9px; }
+
+/* ---------- OUTREACH — the letter ---------- */
+#adv-draft-head .draft-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 18px 24px; border: 1px solid var(--rule); border-bottom: none; border-radius: 12px 12px 0 0; background: var(--paper-sunk); }
+.draft-head .to { font-family: var(--read); font-size: 15px; color: var(--ink-soft); }
+.draft-head .to b { color: var(--ink); font-weight: 600; font-family: var(--sans); font-size: 14px; }
+.draft-head .editable { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; white-space: nowrap; }
+#adv-letter { background: var(--paper-card) !important; border: 1px solid var(--rule) !important; border-top: none !important; border-radius: 0 0 12px 12px !important; box-shadow: var(--shadow-lift) !important; }
+#adv-letter textarea { background: transparent !important; border: none !important; box-shadow: none !important; font-family: var(--read) !important; font-size: 18px !important; line-height: 1.62 !important; color: var(--ink) !important; padding: 26px 32px !important; letter-spacing: -.003em; }
+#adv-letter textarea::placeholder { color: var(--ink-ghost) !important; font-style: italic; }
+.reassure { display: inline-flex; align-items: center; gap: 9px; font-family: var(--read); font-style: italic; font-size: 14px; color: var(--ink-soft); padding: 16px 2px 0; }
+.reassure .seal { font-family: var(--serif); font-weight: 560; font-style: normal; color: var(--accent); font-size: 13px; border: 1.5px solid var(--accent); border-radius: 50%; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+
+/* ---------- BUTTONS (Gradio, restyled) ---------- */
+.adv-btn { width: fit-content !important; min-width: 0 !important; }
+.adv-btn button, button.adv-btn {
+  font-family: var(--sans) !important; font-size: 14px !important; font-weight: 600 !important; letter-spacing: .005em !important;
+  border-radius: 8px !important; padding: 11px 22px !important; min-width: 0 !important;
+  width: fit-content !important; white-space: nowrap !important;
+  box-shadow: none !important; transition: transform .12s, box-shadow .2s, background .2s, border-color .2s !important;
+}
+.adv-btn.primary button, button.adv-btn.primary { background: var(--accent) !important; color: #fdf6f4 !important; border: 1px solid transparent !important; box-shadow: 0 1px 2px rgba(122,34,24,.3), 0 8px 18px -10px rgba(122,34,24,.5) !important; }
+.adv-btn.primary button:hover { background: var(--accent-deep) !important; transform: translateY(-1px); }
+.adv-btn.secondary button, button.adv-btn.secondary { background: var(--paper-card) !important; color: var(--ink) !important; border: 1px solid var(--rule-strong) !important; }
+.adv-btn.secondary button:hover { border-color: var(--ink-soft) !important; transform: translateY(-1px); }
+.adv-btn button[disabled] { background: var(--paper-sunk) !important; color: var(--ink-ghost) !important; border-color: var(--rule) !important; box-shadow: none !important; cursor: not-allowed !important; transform: none !important; }
+/* the Approve / Regenerate / Discard row reads as one tight, left-aligned group.
+   Gradio's Row is display:grid, which distributes columns unevenly — force flex. */
+#action-row { display: flex !important; gap: 10px !important; justify-content: flex-start !important; margin-top: 12px; }
+#action-row > * { flex: 0 0 auto !important; min-width: 0 !important; width: fit-content !important; }
+
+/* editorial dropdowns (Reach out to / Prep company) — paper, hairline, no grey block */
+.adv-bare .form { background: transparent !important; border: none !important; box-shadow: none !important; }
+.adv-field .wrap, .adv-field .secondary-wrap, .adv-field .container { background: transparent !important; }
+.adv-field input[role="listbox"], .adv-field .wrap-inner {
+  background: var(--paper-card) !important; border: 1px solid var(--rule-strong) !important; border-radius: 8px !important;
+  font-family: var(--read) !important; font-size: 16px !important; color: var(--ink) !important;
+}
+.adv-field ul.options { background: var(--paper-card) !important; border: 1px solid var(--rule-strong) !important; font-family: var(--read) !important; }
+.adv-field ul.options li.item.selected, .adv-field ul.options li.item:hover { background: var(--accent-tint) !important; color: var(--accent-deep) !important; }
+
+/* status / markdown copy */
+.adv-status p, .adv-status { font-family: var(--read) !important; color: var(--ink-soft) !important; font-size: 15px !important; }
+.adv-status b, .adv-status strong { color: var(--ink) !important; font-family: var(--sans) !important; }
+
+/* ---------- COLOPHON ---------- */
+#adv-colophon .colophon { margin-top: 72px; padding-top: 22px; border-top: 1.5px solid var(--ink); display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; color: var(--ink-faint); letter-spacing: .02em; }
+.colophon .mark { font-family: var(--serif); font-weight: 500; color: var(--ink-soft); }
+.colophon .mark .dot { color: var(--accent); }
+
+/* ---------- a11y + responsive ---------- */
+*:focus-visible { outline: 2.5px solid var(--accent) !important; outline-offset: 2px !important; border-radius: 3px; }
+@media (max-width: 880px) {
+  .gradio-container { padding: 0 24px 80px !important; }
+  .sec-head { grid-template-columns: 1fr; gap: 4px; }
+  .sec-index { padding-top: 0; }
+  .row { grid-template-columns: 24px 1fr; }
+  .rate-cell { grid-column: 1 / -1; align-items: flex-start; margin-top: 10px; }
+  .wordmark { font-size: 32px; }
+  .sec-title { font-size: 27px; }
+  /* the ledger scrolls horizontally on mobile — steps keep natural width, never collide */
+  #rail > * { flex: 0 0 auto !important; }
+  .rail-btn { padding-right: 22px !important; }
+  .rate-progress { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .rate-progress .unlock { text-align: left; }
+}
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-    scroll-behavior: auto !important;
-  }
-  .gr-group, .gr-group button.lg:hover { transform: none !important; }
+  *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }
-
-/* Locked steps carry a text/aria cue, not colour alone. */
-.step-locked { opacity: 0.65; }
 """

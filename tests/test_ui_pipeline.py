@@ -90,20 +90,17 @@ def test_cadence_action_advances_after_three_business_days():
     assert pipeline.cadence_action("2026-06-08", "2026-06-12", responded=True)["action"] == "responded"
 
 
-def test_rate_rows_to_motivations_only_accepts_one_to_five():
-    rows = [
-        ["Stripe", "Fintech", 3, "yes", 5],      # valid
-        ["Anthropic", "AI", 2, "no", "4"],       # valid (string number)
-        ["Figma", "Design", 3, "yes", None],     # unrated
-        ["Notion", "SaaS", 1, "no", 9],          # out of range -> unrated
-        ["", "", 0, "no", 3],                    # blank company -> skipped
-    ]
-    m = pipeline.rate_rows_to_motivations(rows)
-    assert m == {"Stripe": 5, "Anthropic": 4, "Figma": None, "Notion": None}
-    # round-trips with the rate-gate: 2 of these are rated.
-    assert sum(1 for v in m.values() if v is not None) == 2
+def test_parse_ratings_only_accepts_one_to_five():
+    import json
+    # The rater bridge writes {company: score}; trust nothing.
+    j = json.dumps({"Stripe": 5, "Anthropic": "4", "Figma": 9, "Notion": 0, "": 3, "Acme": "x"})
+    m = pipeline.parse_ratings(j)
+    assert m == {"Stripe": 5, "Anthropic": 4}  # 9/0 out of range, blank skipped, non-numeric dropped
+    assert sum(1 for v in m.values() if v in (1, 2, 3, 4, 5)) == 2
 
 
-def test_records_to_rate_rows_shape():
-    rows = pipeline.records_to_rate_rows([_rec("Stripe", posting=3, alum=True)])
-    assert rows[0][0] == "Stripe" and rows[0][2] == 3 and rows[0][3] == "yes" and rows[0][4] is None
+def test_parse_ratings_rejects_malformed_or_non_dict():
+    assert pipeline.parse_ratings("not json") == {}
+    assert pipeline.parse_ratings("[1, 2, 3]") == {}   # non-dict JSON
+    assert pipeline.parse_ratings("") == {}
+    assert pipeline.parse_ratings(None) == {}
