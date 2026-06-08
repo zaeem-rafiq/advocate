@@ -15,3 +15,7 @@ service-account*.json
 .claude/skill-usage.log
 uv.lock
 orchestrator-data/
+# ADK local runtime cache (per-app session/state) — must never ship in the Cloud Run
+# image. `.gcloudignore` does `#!include:.gitignore`, so listing it here also keeps a
+# `gcloud run deploy --source .` build context clean (e.g. agent_apps/<app>/.adk/).
+.adk/
