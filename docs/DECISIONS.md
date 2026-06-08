@@ -5,6 +5,23 @@ Format: date · decision · rationale · reversible?
 
 ---
 
+## 2026-06-07 — Prod deploy advocate-00027-mn8 (sourcing first-pass retry + observable logs) — supersedes 00026
+
+Deployed `main` @ `0eea171` from the merged tree (FF push to `origin/main`, then `gcloud run deploy
+--source .` from the clean worktree, whose content == `origin/main`; the primary checkout's untracked
+`.adk` cache is not gitignored, so deploying from the worktree avoided shipping it). Ships the bounded
+first-pass retry in `source_organizations` (`ADVOCATE_SOURCING_FIRST_PASS_ATTEMPTS`, default 2) + a
+dedicated stdout handler on the `advocate` logger so the per-attempt fallback diagnostics finally reach
+Cloud Logging. New revision **advocate-00027-mn8** serves 100%; SA `advocate-run@…`, the three env vars,
+and authenticated-only ingress preserved. **Verified live: smoke auth `GET /list-apps → 200
+["advocate_app"]`, anon → 403; 5 prod sourcing `/run`s returned grounded lists of 45/58/62/56/54 orgs
+(all met_minimum), zero app errors.** The transient 0-org case did not recur (11/11 grounded passes
+clean today), so the retry/fallback path was not exercised live; its WARNING/EXCEPTION now route to
+stdout (probe-verified) and will be captured on the next residual empty
+(`textPayload:"advocate.sourcing"` / `"attempt"` / `"fell back"`). No throwaway Firestore data — the runs
+were sourcing-only (no `save_pipeline`; ADK sessions are in-memory). Reversible: yes (roll traffic to
+advocate-00026-s78; set `ADVOCATE_SOURCING_FIRST_PASS_ATTEMPTS=1` to restore single-pass).
+
 ## 2026-06-07 — Close the intermittent 0-org sourcing gap (retry first pass + observable logs)
 
 Addresses the "future reliability look" flagged in the advocate-00026-s78 entry below.
@@ -15,9 +32,9 @@ fallback WARNING/EXCEPTION **never reached Cloud Logging** (no logging config an
 revisions of prod logs showed zero `advocate.*` lines, so the failure was invisible). Fix: bounded
 first-pass retry (`ADVOCATE_SOURCING_FIRST_PASS_ATTEMPTS`, default 2 — covers parse-empty /
 not-grounded / per-attempt transient exception) + a dedicated stdout handler on the `advocate` logger
-in `app.py`. Tests +5 → **266 passed, 1 skipped**; live end-to-end returned 65 grounded orgs. NOT yet
-deployed (pending approval). Reversible: yes (set `ADVOCATE_SOURCING_FIRST_PASS_ATTEMPTS=1` to restore
-single-pass; revert the `app.py` handler).
+in `app.py`. Tests +5 → **266 passed, 1 skipped**; live end-to-end returned 65 grounded orgs. Deployed as
+**advocate-00027-mn8** (see the prod-deploy entry above). Reversible: yes (set
+`ADVOCATE_SOURCING_FIRST_PASS_ATTEMPTS=1` to restore single-pass; revert the `app.py` handler).
 
 ## 2026-06-07 — Prod deploy advocate-00026-s78 (model-independent MALFORMED fix) — supersedes 00025
 

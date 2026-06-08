@@ -28,7 +28,11 @@ Files: `agents/config.py` (`SOURCING_FIRST_PASS_ATTEMPTS`), `agents/sourcing.py`
 empty / ungrounded / exception recovery + bounded-attempts fallback + all-attempts-raise fallback). Tests +5.
 **266 passed, 1 skipped.** Live-verified: 6/6 raw
 grounded research passes returned ~45 orgs; the new handler routes the fallback WARNING + exception to stdout
-(probe). Not yet deployed (pending approval).
+(probe). **Deployed advocate-00027-mn8** (100% traffic; SA + 3 env vars + auth-only ingress preserved): smoke
+auth `GET /list-apps → 200`, anon → 403; 5 prod sourcing `/run`s returned grounded lists of 45/58/62/56/54
+orgs, zero app errors. The transient empty did not recur (11/11 grounded passes clean), so the retry/fallback
+path is captured-but-not-yet-seen in prod — it will surface on the next residual empty
+(`textPayload:"advocate.sourcing"` / `"attempt"` / `"fell back"`).
 
 ## 2026-06-07 — Harden MALFORMED_FUNCTION_CALL fix to be model-independent (two layers)
 
