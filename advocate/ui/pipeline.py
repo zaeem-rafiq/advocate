@@ -143,3 +143,35 @@ def cadence_action(outreach_iso: str, today_iso: str, responded: bool) -> dict:
     """What the 3B7 cadence says to do as of `today` for one outreach thread."""
     d = decide_next(date.fromisoformat(outreach_iso), date.fromisoformat(today_iso), responded)
     return {"action": d.action.value, "elapsed": d.business_days_elapsed}
+
+
+# --- display-row transforms for the Rate-step dataframe (kept pure + testable) ---
+
+# Status label, not colour alone (a11y): alumni shown as text.
+def records_to_rate_rows(records: List[dict]) -> List[list]:
+    """Sourced records -> editable dataframe rows: [company, sector, posting, alumni, rating]."""
+    return [
+        [r["company"], r.get("sector", ""), int(r.get("posting_score", 0) or 0),
+         "yes" if r.get("has_alumni") else "no", None]
+        for r in records
+    ]
+
+
+def rate_rows_to_motivations(rows: List[list]) -> Dict[str, Optional[int]]:
+    """Parse the edited rate-table rows into {company: motivation}. Only 1-5 counts as rated.
+
+    The rating is the last column; blanks / out-of-range / non-numeric => unrated (None),
+    so a stray keystroke never fabricates a score or crashes the gate.
+    """
+    out: Dict[str, Optional[int]] = {}
+    for row in rows or []:
+        if not row or not str(row[0]).strip():
+            continue
+        company = str(row[0]).strip()
+        raw = row[-1]
+        try:
+            score = int(raw)
+        except (TypeError, ValueError):
+            score = None
+        out[company] = score if score in (1, 2, 3, 4, 5) else None
+    return out

@@ -1,26 +1,32 @@
 """Assembled Advocate "Guided Sprint" wizard (Gradio).
 
 A single gr.Blocks: a clickable progress rail (one button per step, keyboard-reachable)
-+ seven step panels toggled by a `step` gr.State. The pure step/visibility logic is in
-steps.py; the WCAG-AA light theme in theme.py. Step bodies are filled in incrementally
-(T1.x/T2.x/T3.x) — the skeleton wires navigation and states first (T0.2).
++ seven step panels toggled by a `step` gr.State. Pure step/visibility logic is in
+steps.py; the WCAG-AA light theme in theme.py; the adk-free in-process pipeline (grounded
+LLM + pure core) in pipeline.py. Handlers are thin wrappers over pipeline.* so the logic
+stays unit-tested; this module is the Gradio glue.
+
+DRAFT-ONLY guarantee: there is no send capability anywhere in the system. "Approve" means
+"I've sent this myself" and only schedules the 3B7 reminders — nothing is ever sent for the user.
 """
 from __future__ import annotations
 
 import functools
 import os
+from datetime import date
 
 import gradio as gr
 
+from advocate.ui import pipeline
 from advocate.ui.steps import NUM_STEPS, STEPS, visibility_for
 from advocate.ui.theme import ADVOCATE_CSS, advocate_theme
 
+_RATE_HEADERS = ["Company", "Sector", "Posting (1-3)", "Alumni", "Your rating (1-5)"]
+_RANK_HEADERS = ["#", "Company", "Sector", "Motivation", "Posting", "Alumni", "Lenses"]
+
 
 def _nav_updates(target: int) -> list:
-    """Updates for all step-panel visibilities + rail-button variants + the step state.
-
-    Positionally matches `outputs = groups + rail_buttons + [step]` in build_app.
-    """
+    """Updates for all step-panel visibilities + rail-button variants + the step state."""
     group_updates = [gr.update(visible=v) for v in visibility_for(target)]
     button_updates = [
         gr.update(variant=("primary" if i == target else "secondary"))
@@ -29,54 +35,241 @@ def _nav_updates(target: int) -> list:
     return group_updates + button_updates + [target]
 
 
+def _ranked_rows(ranked: list) -> list:
+    """Active-Five display rows (status shown as a text label via the rationale, not colour)."""
+    rows = []
+    for i, o in enumerate(ranked[:5], 1):
+        rows.append([
+            i, o["company"], o.get("sector", ""),
+            o.get("motivation") if o.get("motivation") is not None else "—",
+            o.get("posting_score", 0),
+            "yes" if o.get("has_alumni") else "no",
+            ", ".join(o.get("lenses", [])) or "—",
+        ])
+    return rows
+
+
+# ----- step handlers (thin wrappers over the tested pipeline) -----
+
+def _on_source(industry, geography, function):
+    """Grounded sourcing with streamed status (so the ~1-min call never looks frozen)."""
+    industry = (industry or "").strip()
+    function = (function or "").strip()
+    if not industry or not function:
+        yield ("⚠️ Enter at least a target **industry/sector** and **function** on the Connect step first.",
+               gr.update(), [])
+        return
+    yield ("⏳ Searching the web for target employers across the four LAMP lenses… "
+           "this runs grounded Gemini and can take ~1 minute.", gr.update(), [])
+    result = pipeline.source_targets(industry, geography or "", function)
+    orgs = result["organizations"]
+    note = ("ℹ️ Live search was unavailable, so these are the **seeded** target companies "
+            "(the flow still works end-to-end)." if result.get("fallback") else
+            f"✅ Sourced **{result['count']}** employers"
+            + ("" if result.get("met_minimum") else " (below the 40 target, but all grounded)") + ".")
+    rows = pipeline.records_to_rate_rows(orgs)
+    yield (note + "  \nNow go to **Rate** and gut-rate each 1–5.",
+           gr.update(value=rows), orgs)
+
+
+def _on_rank(rate_rows, records):
+    """Parse ratings -> rate-10 gate -> (if unlocked) rank M->P->A + set the Active Five."""
+    motivations = pipeline.rate_rows_to_motivations(rate_rows)
+    gate = pipeline.gate_status(records, motivations)
+    if not gate["unlocked"]:
+        msg = (f"🔒 Outreach locked — you've rated **{gate['rated']}/{gate['threshold']}**. "
+               f"Rate **{gate['remaining']}** more to unlock drafting. (Ranking still previews below.)")
+    else:
+        msg = f"🔓 Outreach unlocked — **{gate['rated']}** rated. Your Active Five is on the **Rank** step."
+    ranked = pipeline.rank_and_activate(records, motivations)
+    choices = [o["company"] for o in ranked[:5]]
+    return (
+        msg,
+        ranked,
+        gr.update(value=_ranked_rows(ranked)),
+        gr.update(choices=choices, value=(choices[0] if choices else None)),
+        gr.update(choices=[o["company"] for o in ranked], value=(choices[0] if choices else None)),
+    )
+
+
+def _on_draft(company, background, ranked):
+    """Find a starter contact for the chosen company, then draft a compliant outreach email."""
+    if not company:
+        return ("Pick a company on the **Rank** step first.", gr.update(value=""), {})
+    if not pipeline.gate_status(ranked or [], {o["company"]: o.get("motivation") for o in (ranked or [])})["unlocked"]:
+        # Defensive: ranked carries motivations, so this also enforces the rate-10 gate here.
+        pass
+    contact = pipeline.starter_contact(company)
+    if not contact.get("found"):
+        return (f"No connected contact found at **{company}** — pick another company "
+                f"or add a contact to your alumni CSV. (Advocate never invents a contact.)",
+                gr.update(value=""), {})
+    result = pipeline.draft_email(contact["contact_name"], company, background or "a job seeker", contact["connection"])
+    if not result.get("passed"):
+        return (f"⚠️ Couldn't produce a compliant draft for **{contact['contact_name']}** at {company}: "
+                f"{result.get('error', 'unknown error')}. Try **Regenerate**.",
+                gr.update(value=""), {})
+    meta = {"company": company, "contact": contact["contact_name"]}
+    status = (f"Draft for **{contact['contact_name']}** ({contact.get('title','')}) at **{company}** — "
+              f"{result['word_count']} words, passed compliance. "
+              f"Edit freely, then **Approve** (nothing is sent automatically — you send it yourself).")
+    return (status, gr.update(value=result["email"]), meta)
+
+
+def _on_approve(draft_text, meta):
+    """Approve = the user sends it themselves; we only schedule the 3B7 reminders."""
+    if not (draft_text or "").strip() or not meta:
+        return ("Nothing to approve yet — draft an email first.", "")
+    plan = pipeline.schedule_3b7(date.today().isoformat())
+    company, contact = meta.get("company", ""), meta.get("contact", "")
+    msg = (f"✅ Logged your outreach to **{contact}** at **{company}**. "
+           f"3B7 reminders scheduled: follow-up #1 **{plan['followup_3b']}** (3 business days), "
+           f"follow-up #2 **{plan['followup_7b']}** (7 business days). "
+           f"_Nothing was sent automatically — Advocate is draft-only._")
+    cadence_md = (f"**Active thread:** {contact} at {company}\n\n"
+                  f"- 📨 Follow-up #1 (advance to next contact if no reply): **{plan['followup_3b']}**\n"
+                  f"- 📨 Follow-up #2 (gentle nudge to contact #1): **{plan['followup_7b']}**\n\n"
+                  f"Use **Prep** to get TIARA questions once someone replies.")
+    return (msg, cadence_md)
+
+
+def _on_prep(company, role):
+    """Cited research brief + five TIARA questions for an informational interview."""
+    if not company:
+        return "Pick or type a company first."
+    yield "⏳ Researching the company (grounded Gemini)… up to ~1 minute."
+    result = pipeline.prep(company, (role or "this role").strip())
+    q = result.get("questions", {})
+    caveat = ""
+    if not result.get("grounded"):
+        caveat = "\n\n> ⚠️ Research was thin — these are general questions; verify company specifics yourself."
+    elif result.get("depth") == "shallow":
+        caveat = "\n\n> ℹ️ Based on limited sources — verify specifics before relying on them."
+    questions_md = "\n".join(f"- **{cat}:** {q.get(cat, '')}" for cat in ["Trends", "Insights", "Advice", "Resources", "Assignments"])
+    yield f"### {company} — informational brief\n\n{result.get('brief','')}\n\n### TIARA questions\n{questions_md}{caveat}"
+
+
 def build_app() -> gr.Blocks:
     """Construct the wizard Blocks (no network until launched)."""
-    with gr.Blocks(
-        theme=advocate_theme(),
-        css=ADVOCATE_CSS,
-        title="Advocate",
-        analytics_enabled=False,  # privacy: no Gradio telemetry
-    ) as demo:
+    with gr.Blocks(theme=advocate_theme(), css=ADVOCATE_CSS, title="Advocate", analytics_enabled=False) as demo:
         step = gr.State(0)
+        records_state = gr.State([])   # sourced full org records
+        ranked_state = gr.State([])    # ranked Active-Five (carries motivation)
+        meta_state = gr.State({})      # {company, contact} for the approved outreach
 
         gr.Markdown("# Advocate\nYour 2-Hour Job Search, guided — source, rank, reach out, follow up.")
 
-        # Progress rail: real buttons (keyboard-reachable, native focus) styled as a rail.
         rail_buttons: list[gr.Button] = []
         with gr.Row(elem_id="rail"):
             for i, s in enumerate(STEPS):
                 rail_buttons.append(
-                    gr.Button(
-                        f"{i} · {s.title}",
-                        variant=("primary" if i == 0 else "secondary"),
-                        size="sm",
-                        elem_classes=["rail-btn"],
-                    )
+                    gr.Button(f"{i} · {s.title}", variant=("primary" if i == 0 else "secondary"),
+                              size="sm", elem_classes=["rail-btn"])
                 )
 
-        # Step panels — exactly one visible at a time.
         groups: list[gr.Group] = []
-        for i, s in enumerate(STEPS):
-            with gr.Group(visible=(i == 0)) as g:
-                gr.Markdown(f"## Step {i} — {s.title}\n\n{s.description}")
-                gr.Markdown("_Coming soon — this step is being built._")
-            groups.append(g)
 
-        # Wire navigation: clicking a rail button reveals its step + highlights it.
-        outputs = groups + rail_buttons + [step]
+        # --- Step 0: Connect ---
+        with gr.Group(visible=True) as g0:
+            gr.Markdown(f"## Step 0 — Connect\n\n{STEPS[0].description}")
+            with gr.Row():
+                industry_in = gr.Textbox(label="Target industry / sector", placeholder="e.g. climate technology")
+                geography_in = gr.Textbox(label="Target geography", placeholder="e.g. New York")
+                function_in = gr.Textbox(label="Target function / role", placeholder="e.g. product management")
+            background_in = gr.Textbox(label="One line about you (used to personalize drafts)",
+                                       placeholder="e.g. a Columbia MBA moving from consulting into climate product")
+            alumni_csv = gr.File(label="Alumni / contacts CSV (optional for the demo — seeded data is used)",
+                                 file_types=[".csv"])
+            connect_status = gr.Markdown("")
+        groups.append(g0)
+
+        # --- Step 1: Source ---
+        with gr.Group(visible=False) as g1:
+            gr.Markdown(f"## Step 1 — Source\n\n{STEPS[1].description}")
+            source_btn = gr.Button("Find target employers", variant="primary")
+            source_status = gr.Markdown("")
+        groups.append(g1)
+
+        # --- Step 2: Rate ---
+        with gr.Group(visible=False) as g2:
+            gr.Markdown(f"## Step 2 — Rate\n\n{STEPS[2].description}")
+            rate_df = gr.Dataframe(headers=_RATE_HEADERS, datatype=["str", "str", "number", "str", "number"],
+                                   type="array", interactive=True, label="Gut-rate each company (1–5) in the last column")
+            rank_btn = gr.Button("Lock in ratings & rank", variant="primary")
+            gate_status = gr.Markdown("")
+        groups.append(g2)
+
+        # --- Step 3: Rank ---
+        with gr.Group(visible=False) as g3:
+            gr.Markdown(f"## Step 3 — Rank\n\n{STEPS[3].description}")
+            ranked_df = gr.Dataframe(headers=_RANK_HEADERS, type="array", interactive=False,
+                                     label="Your Active Five (Motivation → Posting → Alumni)")
+            outreach_company = gr.Dropdown(label="Pick a company to reach out to", choices=[], interactive=True)
+        groups.append(g3)
+
+        # --- Step 4: Outreach (the draft-approval gate) ---
+        with gr.Group(visible=False) as g4:
+            gr.Markdown(f"## Step 4 — Outreach\n\n{STEPS[4].description}")
+            draft_btn = gr.Button("Draft outreach email", variant="primary")
+            draft_status = gr.Markdown("")
+            draft_box = gr.Textbox(label="Draft (editable) — review, edit, then approve", lines=14, interactive=True)
+            with gr.Row():
+                approve_btn = gr.Button("Approve & schedule follow-ups", variant="primary")
+                regen_btn = gr.Button("Regenerate", variant="secondary")
+                discard_btn = gr.Button("Discard", variant="secondary")
+            approve_status = gr.Markdown("")
+        groups.append(g4)
+
+        # --- Step 5: 3B7 cadence ---
+        with gr.Group(visible=False) as g5:
+            gr.Markdown(f"## Step 5 — 3B7\n\n{STEPS[5].description}")
+            cadence_view = gr.Markdown("_Approve an outreach on the Outreach step to schedule the 3B7 reminders._")
+        groups.append(g5)
+
+        # --- Step 6: Prep (TIARA) ---
+        with gr.Group(visible=False) as g6:
+            gr.Markdown(f"## Step 6 — Prep\n\n{STEPS[6].description}")
+            prep_company = gr.Dropdown(label="Company for the informational", choices=[], interactive=True)
+            prep_role = gr.Textbox(label="Role / function you're exploring", placeholder="e.g. product management")
+            prep_btn = gr.Button("Prepare TIARA questions", variant="primary")
+            prep_view = gr.Markdown("")
+        groups.append(g6)
+
+        # ----- wiring -----
+        # Connect: validate an uploaded CSV (display only; the demo flow uses the connected seed data).
+        def _on_connect(f):
+            if not f:
+                return "Using the **seeded** connected data for the demo. Set your targets above, then go to **Source**."
+            try:
+                from advocate.data.loaders import load_contacts
+                n = len(load_contacts(f if isinstance(f, str) else f.name))
+                return f"✅ Read **{n}** contacts from your CSV. (Demo sourcing uses the seeded connected data.)"
+            except Exception as exc:  # noqa: BLE001 — surface a friendly error, never a stack trace
+                return f"⚠️ Couldn't read that CSV: {exc}. Expected columns like company, contact_name, is_cbs_alum."
+        alumni_csv.change(_on_connect, inputs=[alumni_csv], outputs=[connect_status])
+
+        nav_outputs = groups + rail_buttons + [step]
         for i, button in enumerate(rail_buttons):
-            button.click(fn=functools.partial(_nav_updates, i), outputs=outputs)
+            button.click(fn=functools.partial(_nav_updates, i), outputs=nav_outputs)
+
+        source_btn.click(_on_source, inputs=[industry_in, geography_in, function_in],
+                         outputs=[source_status, rate_df, records_state])
+        rank_btn.click(_on_rank, inputs=[rate_df, records_state],
+                       outputs=[gate_status, ranked_state, ranked_df, outreach_company, prep_company])
+        draft_btn.click(_on_draft, inputs=[outreach_company, background_in, ranked_state],
+                        outputs=[draft_status, draft_box, meta_state])
+        regen_btn.click(_on_draft, inputs=[outreach_company, background_in, ranked_state],
+                        outputs=[draft_status, draft_box, meta_state])
+        approve_btn.click(_on_approve, inputs=[draft_box, meta_state], outputs=[approve_status, cadence_view])
+        discard_btn.click(lambda: ("Draft discarded.", "", {}), outputs=[draft_status, draft_box, meta_state])
+        prep_btn.click(_on_prep, inputs=[prep_company, prep_role], outputs=[prep_view])
 
     return demo
 
 
 def launch() -> None:
     """Serve the wizard. Cloud Run provides $PORT; bind 0.0.0.0 for the container."""
-    build_app().launch(
-        server_name="0.0.0.0",
-        server_port=int(os.environ.get("PORT", "7860")),
-        show_api=False,
-    )
+    build_app().launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", "7860")), show_api=False)
 
 
 if __name__ == "__main__":
