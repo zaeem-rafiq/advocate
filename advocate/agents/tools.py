@@ -105,6 +105,55 @@ def load_seed_companies(tool_context: ToolContext = None) -> dict:
 
 
 @tool_safe
+def companies_with_contacts(companies: List[str]) -> dict:
+    """Report which companies the user PERSONALLY has a contact at, from their contacts CSV.
+
+    This is the ground truth for "where do I have a contact / a connection / an alum I know?".
+    It reflects the user's actual loaded contacts — the SAME source `find_starter_contact` draws
+    from — so any company it reports is exactly one `find_starter_contact` can then resolve.
+
+    Do NOT confuse this with the "alumni_employers" source-lens badge in an org's `lenses`: that
+    badge only means the company is *known to hire alumni* in general; it is NOT evidence the user
+    knows anyone there. Answer contact/connection questions from THIS tool (or the `has_alumni`
+    flag), never from the lens badge — otherwise you send the user to `find_starter_contact` with
+    nothing to find.
+
+    Args:
+        companies: company names to check (e.g. the sourced/pipeline orgs). Pass an EMPTY list to
+            enumerate every distinct company the user has any contact at.
+
+    Returns:
+        {"companies_with_contacts": [{"company", "contact_count", "has_alum"}, ...], "count": int}.
+        A company with NO contact is simply absent — so an empty list means the user has no personal
+        contact among the companies checked. `has_alum` is True when at least one of those contacts
+        is an alum (the warmest path).
+    """
+    all_contacts = load_contacts(CONTACTS_CSV)
+    # Dedupe requested names, preserving first-seen order so a repeated name is reported once.
+    # Names are passed to contacts_for_company UNCHANGED — exactly as find_starter_contact does —
+    # so the two tools resolve identically for EVERY input (whitespace, case, etc.) and can never
+    # disagree. (Do not normalize here: stripping/casefolding only one side reopens the dead-end
+    # this tool exists to close. The matching semantics live in contacts_for_company, shared by both.)
+    names = list(dict.fromkeys(companies or []))
+    if not names:
+        # Empty/omitted → enumerate every distinct company present in the contacts CSV.
+        names = list(dict.fromkeys(c.company for c in all_contacts if c.company))
+    out = []
+    for name in names:
+        # Route through the SAME helper find_starter_contact uses, so the two never disagree.
+        matched = contacts_for_company(all_contacts, name)
+        if matched:
+            out.append(
+                {
+                    "company": name,
+                    "contact_count": len(matched),
+                    "has_alum": any(c.is_alum for c in matched),
+                }
+            )
+    return {"companies_with_contacts": out, "count": len(out)}
+
+
+@tool_safe
 def find_starter_contact(company: str) -> dict:
     """Find a starter networking contact at a company from the connected source.
 

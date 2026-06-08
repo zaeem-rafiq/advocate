@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-06-08 — Disambiguate the "alumni_employers" lens from an actual contact
+
+The orchestrator conflated two distinct "alumni" signals. **(1)** The `alumni_employers` source LENS is an LLM
+discovery badge in `lenses` meaning "this company is known to hire alumni from the seeker's school/industry"
+(set during grounded sourcing) — it says nothing about the user's own network. **(2)** `has_alumni` / an actual
+contact is set only by matching sourced orgs against the user's contacts CSV — "you personally know someone
+here." When a user asked **"where do I have a contact?"**, the orchestrator listed companies that merely carried
+the *lens* badge as personal connections; `find_starter_contact` then found nothing in the CSV — a confusing
+dead end (observed live: Axoni, Magna, AlphaPoint, Addition Wealth, Alkymi, ValCtrl, Elayne listed as "alumni
+connections", none with a contact).
+
+- **Fix (new tool):** `companies_with_contacts(companies)` — a read-only tool returning which of the given
+  companies actually have a contact in the loaded contacts CSV. It routes through the **same**
+  `contacts_for_company` helper `find_starter_contact` uses, so the two can never disagree for any input
+  (whitespace/case included — both inherit the casefold match from the prior fix). It reports
+  `{company, contact_count, has_alum}`; an empty input list enumerates every company the user knows someone at.
+- **Fix (prompt):** the orchestrator instruction now explicitly separates the lens badge from `has_alumni` / a
+  real contact — step 3 (the badge is a discovery signal, not a personal connection), step 5 (the "alumni
+  connection" shown for the top 5 is the `has_alumni` flag, *not* the lens badge), a dedicated "Where do I have
+  a contact?" section routing such questions to `companies_with_contacts` (authoritative) and demoting
+  `has_alumni` to the alum subset, and a guardrail forbidding the lens badge as the answer.
+- **Tests:** `tests/test_companies_with_contacts.py` (+8) locks the per-input `companies_with_contacts` ⇄
+  `find_starter_contact` invariant across whitespace/case variants, the `has_alum=False` branch, blank/dup
+  dedup, and empty-list enumeration; the tool is added to `GUARDED_TOOLS` (`@tool_safe` boundary).
+  **275 passed, 1 skipped** (3.12 venv). Prompt + tool change → requires a Cloud Run redeploy to take effect.
+
 ## 2026-06-08 — Demo unblock: industry-matched contact fixtures + case-insensitive contact match
 
 A live **fintech** demo (industry/geo/function = Fintech / New York City / Product Management) sourced 57
