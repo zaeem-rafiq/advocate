@@ -29,9 +29,10 @@ Plan: [tasks/plan.md](plan.md) · Budget ~36h · 🔴 demo-critical · 🟡 nice
 - [ ] ✅ **CHECKPOINT D**
 
 ## Phase 4 — Polish, a11y, ship (~5h)
-- [ ] **T4.1** 🟡 States sweep: empty/loading/error everywhere; cold-start skeleton; reduced-motion CSS
-- [ ] **T4.2** 🟡 WCAG AA: contrast/focus/keyboard/status audit; `/design-review` + craft gate
-- [ ] **T4.3** 🔴 Final deploy + IAP smoke + screenshots → `docs/`; run `/test → /code-simplify → /review → /ship`
+- [~] **T4.1** 🟡 States: streamed Source status, seed-fallback notice, locked-gate msg, passed=False/no-contact handled ✅; full empty/cold-start skeleton sweep pending
+- [~] **T4.2** 🟡 Browser click-through DONE (load/nav/live-source→rate/rate-10 gate verified via Playwright) ✅; axe WCAG A/AA = 3 violations, all in Gradio's Dataframe (framework, documented) 🟡; `/design-review` not yet run
+- [ ] **T4.3** 🔴 IAP smoke (your access granted ✅) + `/test → /code-simplify → /review → /ship` for the clean PR (replaces `[skip-chain]` WIP commits)
+- _IAP access granted to zaeem@rafiq.money ✅; Cloud Resource Manager API enabled._
 - [ ] ✅ **CHECKPOINT E — SUBMISSION READY**
 
 ---

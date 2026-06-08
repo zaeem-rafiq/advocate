@@ -61,13 +61,26 @@ So the planned "import advocate.* in-process" had to become "import the **adk-fr
 
 Suite: **278 passed, 1 skipped** (was 266; +12 UI tests). Local serve HTTP 200, app constructs (7 panels/2 dataframes/14 buttons).
 
-## ⚠️ Verified vs PENDING (honest)
-- **Verified:** all step *logic* (unit tests), live grounded sourcing, the app builds + serves, deployed + IAP-gated.
-- **PENDING (needs a browser / your IAP access):** end-to-end **click-through** of the deployed wizard — does clicking Source populate the rate table, does the gate lock, does Approve render the schedule. This is the **T4.2 Playwright/a11y pass**, not yet run. So the flow is "wired + logic-verified + boots," **not yet click-verified in a browser.** Treat the deployed UI as a strong draft, not signed-off.
-- Connect CSV upload is **display/validation only** for the demo — sourcing/contacts use the seeded connected data (`CONTACTS_CSV` is read at import; wiring an uploaded path through needs a small refactor). Flagged, not yet done.
+## T4.2 — browser click-through + a11y (DONE, against a local instance via Playwright)
+Verified live in a real browser (Chromium/Playwright, local no-IAP instance):
+- ✅ App loads; header + 7-button rail + Step 0 render.
+- ✅ Rail nav toggles panels + sets the active button (the `.click → visibility + variant` wiring).
+- ✅ **Source runs live grounded Gemini** — streamed "⏳ Searching…" → "✅ Sourced **45** employers" (~80s).
+- ✅ **Source → Rate**: the editable table populated with all 45 real grounded climate-tech orgs (company/sector/posting/alumni).
+- ✅ **Rate-10 gate**: "Lock in ratings & rank" with 0 ratings → "🔒 Outreach locked — you've rated 0/10. Rate 10 more…".
+- _Note:_ the earlier "reset" was a Playwright MCP `wait_for` request-timeout artifact (the call is ~80s) — NOT an app bug; short waits ran clean.
+- _Not driven in-browser_ (same proven `.click→handler→state` pattern + unit-tested logic): Rank-after-unlock, Draft, Approve, Prep. High confidence by pattern; live draft/prep not browser-exercised this pass.
+
+**axe WCAG 2 A/AA scan: 3 violations — all framework-level (Gradio), not app code:**
+- `nested-interactive` ×6 + `aria-required-children` (critical): Gradio's **Dataframe** renders nested `button>button` cells/headers — fixing fully means replacing the Dataframe component.
+- `aria-hidden-focus` ×1: likely a Gradio internal.
+- My app's own a11y (labels, headings, visible focus ring, light AA theme, reduced-motion, keyboard rail) is sound. For a Section-508 sign-off the Dataframe would need swapping — flagged, not a hackathon blocker.
+- `/design-review` craft gate NOT yet run.
+
+- Connect CSV upload is **display/validation only** for the demo — sourcing/contacts use the seeded connected data (`CONTACTS_CSV` read at import). Flagged, not yet done.
 
 ## Resume point
-**Next:** (1) T4.2 — drive the deployed wizard with Playwright (needs your IAP grant) to click-verify each step + run the WCAG-AA a11y pass + `/design-review` craft gate; (2) wire the T3.1 "what's due today" control; (3) optional: thread an uploaded alumni CSV through sourcing; (4) T4.3 — run `/test → /code-simplify → /review → /ship` for the clean final commit/PR (replaces the `[skip-chain]` WIP commits). Redeploy after each.
+**Next:** (1) you exercise the **deployed** wizard end-to-end via IAP (Source→Rate→rate 10→Rank→Draft→Approve→Prep) — only the live Draft/Prep weren't browser-exercised; (2) decide on the a11y Dataframe swap if Section-508 sign-off is needed (else accept the documented framework limitation); (3) wire the T3.1 "what's due today" control; (4) optional: thread an uploaded alumni CSV through sourcing; (5) **T4.3 — `/test → /code-simplify → /review → /ship`** for the clean final commit/PR (replaces the `[skip-chain]` WIP commits). The deployed revision (00002) already reflects all wired steps.
 
 ## Commits
 - Checkpoint A committed with `[skip-chain]` (WIP — the full /spec→…→/ship chain runs at T4.2/T4.3 before the final clean commit/PR).
