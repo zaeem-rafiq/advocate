@@ -441,11 +441,30 @@ def test_happy_path_returns_grounded_orgs_meeting_minimum(monkeypatch):
     assert result["met_minimum"] is True
     assert result["count"] == 40
     assert len(result["organizations"]) == 40
-    # downstream contract: rank_companies dict shape + S-3 presentation fields, no motivation
-    assert set(result["organizations"][0]) == {
-        "company", "domain", "sector", "location", "has_alumni", "posting_score",
-        "lenses", "rationale",
-    }
+    # COMPACT model-facing return: only company + lens badges. The heavy fields stay in the
+    # session-state stash and re-emerge via rank_companies, so a large list can't overflow the
+    # function-call output (MALFORMED_FUNCTION_CALL).
+    assert set(result["organizations"][0]) == {"company", "lenses"}
+
+
+def test_source_organizations_return_is_compact_but_stash_is_full(monkeypatch):
+    """Model-facing return carries ONLY {company, lenses} (no heavy fields) even at 67 orgs, while
+    the FULL record (rationale/domain/sector/location/signals) is recoverable from the stash."""
+
+    def router(model, contents, config):
+        return _resp(_orgs_json(67), metadatas=[_meta()])
+
+    _install(monkeypatch, router)
+    ctx = _FakeCtx()
+    result = source_organizations("Fintech", "NYC", "PM", ctx)
+
+    # every returned org is the compact shape — no rationale/sector/location/domain/signals
+    assert all(set(o) == {"company", "lenses"} for o in result["organizations"])
+    # the heavy fields live in the authoritative stash, keyed by casefold company
+    rec = ctx.state[CANDIDATE_SIGNALS_KEY]["co0"]
+    assert {"rationale", "domain", "sector", "location", "posting_score", "has_alumni"} <= set(rec)
+    # the model-facing payload stays small even at 67 orgs (well under the truncation threshold)
+    assert len(json.dumps(result["organizations"])) < 8000
 
 
 def test_refine_runs_to_clear_a_lens_gap_and_merges_new_orgs(monkeypatch):
@@ -490,12 +509,14 @@ def test_refine_unions_lenses_for_same_company_end_to_end(monkeypatch):
         return _resp(refined, metadatas=[_meta("https://b.com", "B", "b.com")])
 
     _install(monkeypatch, router)
-    result = source_organizations("Fintech", "NYC", "PM")
+    ctx = _FakeCtx()
+    result = source_organizations("Fintech", "NYC", "PM", ctx)
     by_company = {o["company"]: o for o in result["organizations"]}
     assert "Co100" in by_company  # genuinely new org from the refine pass merged in
-    # Co0 started as dream_peers; refine added active_postings → unioned, posting now scores.
+    # Co0 started as dream_peers; refine added active_postings → unioned (lenses ride the compact return).
     assert set(by_company["Co0"]["lenses"]) == {"dream_peers", "active_postings"}
-    assert by_company["Co0"]["posting_score"] == POSTING_SCORE_ACTIVE
+    # posting_score now lives in the stash (not the compact return) and reflects the union → 2.
+    assert ctx.state[CANDIDATE_SIGNALS_KEY]["co0"]["posting_score"] == POSTING_SCORE_ACTIVE
 
 
 def test_grounded_via_web_search_queries_without_chunks(monkeypatch):
@@ -589,14 +610,16 @@ def test_has_alumni_resolved_from_contacts_csv(monkeypatch):
     _install(monkeypatch, router)
     # Co0 is an alum company; nothing else matches.
     monkeypatch.setattr("advocate.agents.sourcing.load_contacts", lambda path: [_alum_contact("Co0")])
-    result = source_organizations("Fintech", "NYC", "PM")
+    ctx = _FakeCtx()
+    source_organizations("Fintech", "NYC", "PM", ctx)
 
-    by_company = {o["company"]: o for o in result["organizations"]}
-    assert by_company["Co0"]["has_alumni"] is True
-    assert by_company["Co1"]["has_alumni"] is False
+    # has_alumni / posting_score live in the authoritative stash (the compact return omits them).
+    idx = ctx.state[CANDIDATE_SIGNALS_KEY]
+    assert idx["co0"]["has_alumni"] is True
+    assert idx["co1"]["has_alumni"] is False
     # _orgs_json cycles lenses; Co2 lands on active_postings → posting_score = 2.
-    assert by_company["Co2"]["posting_score"] == POSTING_SCORE_ACTIVE
-    assert by_company["Co0"]["posting_score"] == 0  # Co0 lands on dream_peers
+    assert idx["co2"]["posting_score"] == POSTING_SCORE_ACTIVE
+    assert idx["co0"]["posting_score"] == 0  # Co0 lands on dream_peers
 
 
 def test_non_alum_contacts_do_not_set_flag(monkeypatch):
@@ -609,8 +632,9 @@ def test_non_alum_contacts_do_not_set_flag(monkeypatch):
     monkeypatch.setattr(
         "advocate.agents.sourcing.load_contacts", lambda path: [_alum_contact("Co0", is_alum=False)]
     )
-    result = source_organizations("Fintech", "NYC", "PM")
-    assert all(o["has_alumni"] is False for o in result["organizations"])
+    ctx = _FakeCtx()
+    source_organizations("Fintech", "NYC", "PM", ctx)
+    assert all(r["has_alumni"] is False for r in ctx.state[CANDIDATE_SIGNALS_KEY].values())
 
 
 # --- session-state hardening: signals survive the motivation-scoring re-serialization ---
@@ -736,7 +760,8 @@ def test_alumni_resolution_skipped_gracefully_on_contacts_load_failure(monkeypat
         raise FileNotFoundError(path)
 
     monkeypatch.setattr("advocate.agents.sourcing.load_contacts", _boom)
-    result = source_organizations("Fintech", "NYC", "PM")
+    ctx = _FakeCtx()
+    result = source_organizations("Fintech", "NYC", "PM", ctx)
     assert result["grounded"] is True
     assert result["count"] == 40
-    assert all(o["has_alumni"] is False for o in result["organizations"])
+    assert all(r["has_alumni"] is False for r in ctx.state[CANDIDATE_SIGNALS_KEY].values())

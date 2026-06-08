@@ -360,3 +360,29 @@ on the request path imports it). Reversible: yes (roll traffic back to a prior r
 - **Back-compat:** empty state → identity passthrough (existing no-context / without-state tests stay
   green); tools keep `.get()` tolerance so a full dict still works. Tests +4 → **237 passed, 1
   skipped**. Live 67-org re-run to confirm pending redeploy. Reversible: yes.
+
+## 2026-06-07 — MALFORMED_FUNCTION_CALL: make the fix MODEL-INDEPENDENT (two layers)
+
+- **Why the prior fix wasn't enough.** It relied on the orchestrator LLM *choosing* to send the
+  minimal `{company, motivation}` payload. A live run proved the model can still rebuild the full fat
+  sourced list as a Python literal under Gemini 2.5's default `mode=AUTO` (compositional / code-gen
+  function calling) → output-token overflow → MALFORMED. A 3-agent investigation over the installed
+  ADK 2.2.0 + genai source confirmed: code-gen calling is the MODEL's own AUTO behavior (no
+  planner/code_executor is set), and ADK forwards `generate_content_config` (incl. `tool_config`)
+  verbatim to Vertex (basic.py:49-53, google_llm.py).
+- **Layer 1 — data minimization (primary, model-independent).** `source_organizations` returns a
+  COMPACT `[{company, lenses}]` projection; the FULL record (rationale/domain/sector/location +
+  signals) is still stashed via `candidate_records_index` and re-emerges through `rank_companies`
+  (which returns lenses+rationale). The heavy `rationale` is *absent from the model's context*, so it
+  can't be re-serialized regardless of compliance: 67-org return ~26 KB → ~2.7 KB. PRD S-3 preserved
+  — badges show at step 3 from `lenses`; rationale rides the ranked top-5 (step 5).
+- **Layer 2 — `tool_config(mode=VALIDATED)` + `max_output_tokens=8192` belt.** Forces compact
+  structured calls instead of free-form Python while preserving plain-text turns (`ANY` rejected — it
+  forces a call every turn, breaking conversational steps 1/3/5/8; `NONE` disables tools). VALIDATED
+  is a newer mode — if the deployed endpoint ignores it, Layer 1 alone fixes the overflow, so it's
+  safe-by-default. Wired in `build_root_agent` (`generate_content_config`).
+- **Scope:** `agents/sourcing.py` + `agents/orchestrator.py` + `tests/test_sourcing.py` (compact return
+  + stash assertions + a 67-org byte-size guard <8 KB). `load_seed_companies` left as-is (small list,
+  no rationale; Layer 2 covers it). `core/models.py:Org`/ranker untouched. Tests +1 → **261 passed, 1
+  skipped**. Live multi-run verification (nondeterministic failure ⇒ several large-list rank runs)
+  pending redeploy. Reversible: yes.

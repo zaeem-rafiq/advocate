@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-06-07 — Harden MALFORMED_FUNCTION_CALL fix to be model-independent (two layers)
+
+The prior fix relied on the model *choosing* to send a minimal payload; a live run showed it can
+still rebuild the fat sourced list as a Python literal under Gemini's default `mode=AUTO` (code-gen /
+"compositional" calling) → output overflow → `MALFORMED_FUNCTION_CALL`. Two mechanism-level layers,
+neither dependent on the prompt (root cause + fix verified against the installed ADK/genai source via
+a 3-agent investigation):
+
+- **Layer 1 — data minimization (primary).** `source_organizations` now returns a COMPACT
+  `[{company, lenses}]` projection to the model while still stashing the FULL record (signals +
+  domain/sector/location/lenses/rationale) in session state. `rank_companies` already re-emits
+  `lenses`+`rationale` from the stash, so the top-5 keeps its S-3 badges. The heavy `rationale` is
+  *physically absent* from the model's context, so it can't be re-serialized — 67-org return drops
+  ~26 KB → ~2.7 KB. Step-3 presents badges from `lenses`; the rationale rides the ranked top-5
+  (PRD S-3 still satisfied).
+- **Layer 2 — API-boundary belt.** The orchestrator's `generate_content_config.tool_config` sets
+  `FunctionCallingConfig(mode=VALIDATED)` (+ `max_output_tokens=8192`), forcing any function call into
+  a compact STRUCTURED call instead of free-form Python, while still allowing plain-text turns
+  (`ANY` would break those). ADK forwards the config verbatim (verified). Degrades safely: if the
+  endpoint ignores VALIDATED, Layer 1 alone prevents the overflow.
+- **Layer 3 (already shipped):** session-state recovery means the model only *needs* `{company, motivation}`.
+
+Files: `agents/sourcing.py` (compact return), `agents/orchestrator.py` (tool_config + step-3 wording),
+`tests/test_sourcing.py` (compact-return + stash assertions, byte-size guard). `load_seed_companies`
+left as-is (small list, no rationale; Layer 2 covers it). Tests +1. **261 passed, 1 skipped.**
+(Live multi-run verification on the new revision to follow.)
+
 ## 2026-06-07 — Fix: MALFORMED_FUNCTION_CALL on ranking a large org list (S-3 regression)
 
 A live dev-UI run surfaced a `MALFORMED_FUNCTION_CALL` when ranking ~67 sourced companies. Root

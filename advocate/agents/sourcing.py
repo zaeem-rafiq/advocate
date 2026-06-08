@@ -259,11 +259,17 @@ def source_organizations(
                 len(orgs), MIN_SOURCED_ORGS, industry, geography, function,
             )
         org_dicts = [o.to_rank_dict() for o in orgs]
-        # Stash the authoritative ranking signals so rank/persist can recover them even if
-        # the LLM drops posting_score/has_alumni while folding in the user's motivation.
+        # Stash the FULL records (signals + presentation fields) so rank/persist rebuild a complete
+        # org dict from a minimal {company, motivation} payload.
         stash_candidate_signals(tool_context, org_dicts)
+        # Return only a COMPACT projection (company + lens badges) to the model. The heavy fields
+        # (rationale/sector/location/domain/posting_score/has_alumni) are authoritative in the stash
+        # and re-emerge via rank_companies, so they must NOT ride the model's context: re-serializing
+        # a large list into a function call overflows Gemini's output budget (MALFORMED_FUNCTION_CALL).
+        # lenses stay (tiny) so step-3 can show source-lens badges; the rationale rides the ranked output.
+        compact = [{"company": d["company"], "lenses": d["lenses"]} for d in org_dicts]
         return {
-            "organizations": org_dicts,
+            "organizations": compact,
             "count": len(orgs),
             "grounded": result.findings.grounded,
             "met_minimum": met_minimum,

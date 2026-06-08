@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from google.adk.agents import Agent
 from google.adk.tools import FunctionTool
+from google.genai import types
 
 from advocate.agents.config import ROUTINE_MODEL
 from advocate.agents.drafting import draft_outreach_email
@@ -42,9 +43,9 @@ Flow for building the target list (LAMP):
    false, the list is real but below the 40-org target — say so, and still proceed.
 3. Present the sourced organizations — for each, show its source-lens badge(s) from the
    `lenses` field (Dream peers / Alumni employers / Active postings / Trends; an org may
-   carry several) and its one-line `rationale` so the user has context — then ask the user
-   to gut-rate their MOTIVATION from 1 (low) to 5 (high) for each. Accept the scores
-   exactly as given.
+   carry several). The per-org one-line rationale is presented later with the ranked top 5
+   (it is not in this list). Then ask the user to gut-rate their MOTIVATION from 1 (low) to
+   5 (high) for each. Accept the scores exactly as given.
 4. Call `rank_companies` to get the deterministic Motivation -> Posting -> Alumni ranking.
    Pass ONLY a minimal list of {"company": <name>, "motivation": <1-5 int>} for every
    sourced organization — do NOT resend domain, sector, location, posting_score, has_alumni,
@@ -115,6 +116,19 @@ def build_root_agent() -> Agent:
         model=ROUTINE_MODEL,
         description="Root orchestrator for the Advocate 2-Hour Job Search.",
         instruction=ORCHESTRATOR_INSTRUCTION,
+        # Constrain function calls to compact, structured calls (mode=VALIDATED) instead of Gemini's
+        # free-form code-gen ("compositional") calling, which can rebuild a large org list as a Python
+        # literal and overflow the output budget -> MALFORMED_FUNCTION_CALL. VALIDATED still permits
+        # plain-text turns (required for steps 1/3/5/8); ANY would force a call every turn. The
+        # max_output_tokens cap is a graceful belt. (Defense-in-depth atop the compact source return.)
+        generate_content_config=types.GenerateContentConfig(
+            tool_config=types.ToolConfig(
+                function_calling_config=types.FunctionCallingConfig(
+                    mode=types.FunctionCallingConfigMode.VALIDATED
+                )
+            ),
+            max_output_tokens=8192,
+        ),
         tools=[
             FunctionTool(func=source_organizations),
             FunctionTool(func=rank_companies),
