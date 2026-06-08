@@ -30,9 +30,10 @@ Plan: [tasks/plan.md](plan.md) · Budget ~36h · 🔴 demo-critical · 🟡 nice
 
 ## Phase 4 — Polish, a11y, ship (~5h)
 - [~] **T4.1** 🟡 States: streamed Source status, seed-fallback notice, locked-gate msg, passed=False/no-contact handled ✅; full empty/cold-start skeleton sweep pending
-- [~] **T4.2** 🟡 Browser click-through DONE (load/nav/live-source→rate/rate-10 gate verified via Playwright) ✅; axe WCAG A/AA = 3 violations, all in Gradio's Dataframe (framework, documented) 🟡; `/design-review` not yet run
-- [ ] **T4.3** 🔴 IAP smoke (your access granted ✅) + `/test → /code-simplify → /review → /ship` for the clean PR (replaces `[skip-chain]` WIP commits)
-- _IAP access granted to zaeem@rafiq.money ✅; Cloud Resource Manager API enabled._
+- [x] **T4.2** 🟡 Browser click-through DONE (Playwright: load/nav/live-source→rate/rate-10 gate) ✅; live Draft+Prep smoke ✅; axe WCAG A/AA = 3 violations, all in Gradio's Dataframe (framework, documented) 🟡; `/design-review` skill not run (axe used instead)
+- [x] **T4.3 chain** ✅ /test (+33 UI tests, 299 passed) → /code-simplify → /review (4-axis adversarial, 11 confirmed) → fixes (gate enforcement + 5 more) → merged origin/main (7 commits) → CHANGELOG. **PR next.**
+- _IAP access granted to zaeem@rafiq.money ✅; Cloud Resource Manager API enabled. Deployed rev 00004 (REQUIRE_IAP dormant)._
+- _Remaining nice-to-haves: T3.1 "due today" control; thread uploaded CSV through sourcing; Gradio-Dataframe a11y swap (Section-508); CLAUDE.md Services section (add advocate-ui)._
 - [ ] ✅ **CHECKPOINT E — SUBMISSION READY**
 
 ---

@@ -1,5 +1,36 @@
 # Changelog
 
+## 2026-06-08 — Feature: Gradio "Guided Sprint" end-user UI (separate Cloud Run service, behind IAP)
+
+Advocate's only surfaces were the ADK dev playground (Google's own debug UI, "not a user-facing UI"),
+a raw `/run` API, and an offline CLI — none usable by the job-seeker end user or demoable to the
+university-career-center buyer. This adds a real product UI: a 7-step **Guided Sprint** wizard
+(Connect → Source → Rate → Rank → Outreach → 3B7 → Prep) built in **Gradio** (pure Python, no JS),
+deployed as a SEPARATE Cloud Run service (`advocate-ui`) behind **IAP** (Google Workspace SSO).
+
+- **In-process architecture (no `/run_sse` hop):** the UI imports the advocate package and drives the
+  PURE CORE for deterministic steps + the google-genai-backed agent functions for the LLM steps. It does
+  NOT contain `google-adk` — adk and gradio are dependency-incompatible (pydantic/starlette/websockets),
+  so `google-adk` moved to a new `[agent]` extra and the `ToolContext` import in `sourcing.py`/`tools.py`
+  is now optional. The UI image installs `.[ui]` (resolved with uv); the ADK service installs `.[agent]`.
+- **The defining interaction — draft approval:** review/edit/Approve/Regenerate/Discard. DRAFT-ONLY holds
+  structurally (no send capability exists); "Approve" only schedules the 3B7 reminders.
+- **The rate-10 gate is ENFORCED** (not cosmetic): the Draft button is disabled and `_on_draft` refuses
+  until 10 orgs are rated. Identity columns in the Rate table are locked so edits can't mis-key the gate.
+- **WCAG-AA light theme** (AA-contrast tokens, visible focus, reduced-motion, status-as-text, keyboard rail).
+- **Hardening:** capped CSV uploads (5 MB); env-gated IAP defense-in-depth (`REQUIRE_IAP`, dormant until
+  the IAP identity header is confirmed); friendly empty/loading/error states throughout.
+
+Verified: Playwright click-through (load → nav → live grounded Source = 45 orgs → Rate table → rate-10 gate)
++ live in-process Draft (compliant 76-word email) + Prep (grounded brief + 5 TIARA). axe WCAG A/AA = 3
+violations, all in Gradio's Dataframe component (framework-level, documented). A 4-axis adversarial review
+ran (11 confirmed findings); the critical + high + cheap-win items are fixed here.
+
+Files: NEW `advocate/ui/` (`steps.py`, `theme.py`, `pipeline.py`, `app.py`, `__main__.py`), `Dockerfile.ui`,
+`cloudbuild.ui.yaml`; MODIFIED `pyproject.toml` (`[agent]`/`[ui]` extras), `Dockerfile` (`.[agent]`),
+`advocate/agents/sourcing.py` + `tools.py` (optional ToolContext); NEW tests `test_ui_steps.py`,
+`test_ui_pipeline.py`, `test_ui_handlers.py` (+33). **299 passed, 1 skipped.** Deployed: `advocate-ui` rev 00004.
+
 ## 2026-06-08 — Disambiguate the "alumni_employers" lens from an actual contact
 
 The orchestrator conflated two distinct "alumni" signals. **(1)** The `alumni_employers` source LENS is an LLM
