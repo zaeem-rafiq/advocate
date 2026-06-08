@@ -210,7 +210,10 @@ def build_app() -> gr.Blocks:
         ranked_state = gr.State([])    # ranked Active-Five (carries motivation); read by _on_draft to enforce the gate
         meta_state = gr.State({})      # {company, contact} for the approved outreach
 
-        gr.Markdown("# Advocate\nYour 2-Hour Job Search, guided — source, rank, reach out, follow up.")
+        gr.Markdown(
+            "# Advocate\nYour 2-Hour Job Search, guided — source, rank, reach out, follow up.",
+            elem_id="app-header",
+        )
 
         rail_buttons: list[gr.Button] = []
         with gr.Row(elem_id="rail"):
@@ -226,11 +229,15 @@ def build_app() -> gr.Blocks:
         with gr.Group(visible=True) as g0:
             gr.Markdown(f"## Step 0 — Connect\n\n{STEPS[0].description}")
             with gr.Row():
-                industry_in = gr.Textbox(label="Target industry / sector", placeholder="e.g. climate technology")
-                geography_in = gr.Textbox(label="Target geography", placeholder="e.g. New York")
-                function_in = gr.Textbox(label="Target function / role", placeholder="e.g. product management")
-            background_in = gr.Textbox(label="One line about you (used to personalize drafts)",
-                                       placeholder="e.g. a Columbia MBA moving from consulting into climate product")
+                industry_in = gr.Textbox(label="Target industry / sector", placeholder="e.g. climate technology",
+                                         max_lines=1, elem_classes=["adv-field"])
+                geography_in = gr.Textbox(label="Target geography", placeholder="e.g. New York",
+                                          max_lines=1, elem_classes=["adv-field"])
+                function_in = gr.Textbox(label="Target function / role", placeholder="e.g. product management",
+                                         max_lines=1, elem_classes=["adv-field"])
+            background_in = gr.Textbox(label="One line about you (used to personalize drafts)", max_lines=1,
+                                       placeholder="e.g. a Columbia MBA moving from consulting into climate product",
+                                       elem_classes=["adv-field"])
             alumni_csv = gr.File(label="Alumni / contacts CSV (optional for the demo — seeded data is used)",
                                  file_types=[".csv"])
             connect_status = gr.Markdown("")
@@ -246,6 +253,11 @@ def build_app() -> gr.Blocks:
         # --- Step 2: Rate ---
         with gr.Group(visible=False) as g2:
             gr.Markdown(f"## Step 2 — Rate\n\n{STEPS[2].description}")
+            gr.Markdown(
+                "_Companies appear here once you've sourced them on the **Source** step — "
+                "first instinct, no research._",
+                elem_classes=["adv-hint"],
+            )
             # Only the rating column (index 4) is editable — editing identity columns would
             # mis-key the rate-10 gate (a finding from review); lock columns 0-3.
             rate_df = gr.Dataframe(headers=_RATE_HEADERS, datatype=["str", "str", "number", "str", "number"],
@@ -268,9 +280,18 @@ def build_app() -> gr.Blocks:
             gr.Markdown(f"## Step 4 — Outreach\n\n{STEPS[4].description}")
             # Disabled until the rate-10 gate unlocks (set interactive by _on_rank).
             draft_btn = gr.Button("Draft outreach email", variant="primary", interactive=False)
+            gr.Markdown(
+                "_Drafting unlocks once you've rated **10** companies on the **Rate** step. "
+                "Advocate only ever drafts — nothing is sent for you._",
+                elem_classes=["adv-hint"],
+            )
             draft_status = gr.Markdown("")
-            draft_box = gr.Textbox(label="Draft (editable) — review, edit, then approve", lines=14, interactive=True)
-            with gr.Row():
+            draft_box = gr.Textbox(
+                label="Draft (editable) — review, edit, then approve", lines=14, interactive=True,
+                placeholder="Your draft appears here after you click “Draft outreach email”. "
+                            "You can edit every word before approving — then send it yourself.",
+            )
+            with gr.Row(elem_id="action-row"):
                 approve_btn = gr.Button("Approve & schedule follow-ups", variant="primary")
                 regen_btn = gr.Button("Regenerate", variant="secondary")
                 discard_btn = gr.Button("Discard", variant="secondary")
@@ -288,10 +309,17 @@ def build_app() -> gr.Blocks:
             gr.Markdown(f"## Step 6 — Prep\n\n{STEPS[6].description}")
             prep_company = gr.Dropdown(label="Company for the informational", choices=[],
                                        interactive=True, allow_custom_value=True)
-            prep_role = gr.Textbox(label="Role / function you're exploring", placeholder="e.g. product management")
+            prep_role = gr.Textbox(label="Role / function you're exploring", placeholder="e.g. product management",
+                                   max_lines=1, elem_classes=["adv-field"])
             prep_btn = gr.Button("Prepare TIARA questions", variant="primary")
             prep_view = gr.Markdown(_PREP_PLACEHOLDER)
         groups.append(g6)
+
+        gr.Markdown(
+            "Advocate · draft-only — nothing is ever sent for you. Built on Steve Dalton's "
+            "2-Hour Job Search (LAMP → 3B7 → TIARA).",
+            elem_id="app-footer",
+        )
 
         # ----- wiring -----
         # Connect: validate an uploaded CSV (display only; the demo flow uses the connected seed data).
