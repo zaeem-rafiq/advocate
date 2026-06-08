@@ -574,6 +574,106 @@ def test_backend_fault_falls_back_not_error_dict(monkeypatch):
     assert "error" not in result  # NOT tool_safe's {"error"} shape
 
 
+# --- agent wiring: first-pass retry before the honest fallback (reliability gap) -------
+# The 0-org result is TRANSIENT (verified live: 6/6 identical-param runs returned ~45 orgs),
+# so a single grounded miss must be RETRIED before swapping to demo seeds — covering all three
+# transient modes: (a) parse-empty, (b) not-grounded, (c) a per-attempt genai/Vertex fault.
+
+
+def test_first_pass_retries_then_succeeds_on_transient_empty(monkeypatch):
+    """A transient first pass (grounded but unparseable → 0 orgs) must RETRY before falling
+    back. First call yields no parseable orgs; the retry returns a full grounded list →
+    the tool ships grounded orgs instead of seeds (today it falls back on attempt 1)."""
+    gc = {"n": 0}
+
+    def router(model, contents, config):
+        gc["n"] += 1
+        if gc["n"] == 1:
+            return _resp("I could not find any companies.", metadatas=[_meta()])  # mode (a)
+        return _resp(_orgs_json(40), metadatas=[_meta_searched()])  # grounded recovery
+
+    _install(monkeypatch, router)
+    result = source_organizations("Fintech", "NYC", "PM")
+    assert gc["n"] == 2  # retried the first pass rather than short-circuiting to seeds
+    assert result["grounded"] is True
+    assert result["count"] == 40
+    assert result["organizations"]  # real grounded orgs, not the empty fallback
+
+
+def test_first_pass_retries_then_succeeds_on_ungrounded_then_grounded(monkeypatch):
+    """Mode (b): the first pass parses orgs but the model didn't actually search
+    (grounded=False) → retry; the second pass searches → ship grounded orgs."""
+    gc = {"n": 0}
+
+    def router(model, contents, config):
+        gc["n"] += 1
+        if gc["n"] == 1:
+            return _resp(_orgs_json(40), metadatas=[])  # parsed, but NOT grounded
+        return _resp(_orgs_json(40), metadatas=[_meta_searched()])  # grounded recovery
+
+    _install(monkeypatch, router)
+    result = source_organizations("Fintech", "NYC", "PM")
+    assert gc["n"] == 2
+    assert result["grounded"] is True
+    assert result["count"] == 40
+
+
+def test_first_pass_retries_after_a_transient_exception(monkeypatch):
+    """Mode (c): a transient genai/Vertex fault on the first attempt is retried (not an
+    instant fallback). First call raises; the retry succeeds → grounded orgs, no crash,
+    and never the tool_safe {'error'} shape."""
+    gc = {"n": 0}
+
+    def router(model, contents, config):
+        gc["n"] += 1
+        if gc["n"] == 1:
+            raise TimeoutError("transient 504 from Vertex")
+        return _resp(_orgs_json(40), metadatas=[_meta()])
+
+    _install(monkeypatch, router)
+    result = source_organizations("Fintech", "NYC", "PM")
+    assert gc["n"] == 2
+    assert result["grounded"] is True
+    assert result["count"] == 40
+    assert "error" not in result
+
+
+def test_first_pass_exhausts_bounded_attempts_then_falls_back(monkeypatch):
+    """When every attempt is ungrounded the tool still falls back honestly — but only AFTER
+    exhausting the bounded retry budget (proves the retry is BOUNDED, not single-shot and not
+    unbounded): exactly SOURCING_FIRST_PASS_ATTEMPTS calls, then the empty fallback."""
+    from advocate.agents import config as cfg
+    gc = {"n": 0}
+
+    def router(model, contents, config):
+        gc["n"] += 1
+        return _resp(_orgs_json(40), metadatas=[])  # parsed but never grounded
+
+    _install(monkeypatch, router)
+    result = source_organizations("X", "Y", "Z")
+    assert result["grounded"] is False
+    assert result["organizations"] == []
+    assert gc["n"] == cfg.SOURCING_FIRST_PASS_ATTEMPTS  # bounded: exactly N attempts, no more
+
+
+def test_every_attempt_raising_falls_back_after_bounded_attempts(monkeypatch):
+    """Mode (c) persisting: when EVERY attempt raises a transient fault, the tool retries up
+    to the budget then falls back honestly (never crashes, never an {'error'} dict)."""
+    from advocate.agents import config as cfg
+    gc = {"n": 0}
+
+    def router(model, contents, config):
+        gc["n"] += 1
+        raise TimeoutError("persistent 504 from Vertex")
+
+    _install(monkeypatch, router)
+    result = source_organizations("X", "Y", "Z")
+    assert result["grounded"] is False
+    assert result["organizations"] == []
+    assert "error" not in result
+    assert gc["n"] == cfg.SOURCING_FIRST_PASS_ATTEMPTS  # each attempt retried, then fallback
+
+
 def test_below_minimum_still_ships_grounded_with_flag(monkeypatch, caplog):
     """Real but thin sourcing (never reaches 40 within budget) ships grounded=True,
     met_minimum=False, and logs the shortfall rather than swapping to demo seeds."""

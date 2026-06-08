@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-06-07 — Reliability: retry the first sourcing pass before falling back + make app logs observable
+
+`source_organizations` intermittently returned 0 orgs (honest empty → the orchestrator switches to
+`load_seed_companies`, so the user gets demo seeds instead of a real grounded LAMP list). Root cause: the
+first grounded research pass ran **once** and short-circuited straight to the seed fallback on any
+empty/ungrounded/excepting result — with no retry. The 0-org result is **transient, not deterministic**:
+6/6 live grounded runs on the exact symptom params (Fintech / New York City / Product Management) returned
+44–50 orgs (all grounded, `finish=STOP`).
+
+- **Fix (reliability):** the first pass is now retried up to `ADVOCATE_SOURCING_FIRST_PASS_ATTEMPTS`
+  (default 2) before the honest fallback. Each attempt is independently guarded, so a transient
+  genai/Vertex fault (timeout / 429 / 5xx) is retried too — covering all three transient modes
+  (parse-empty, not-grounded, per-attempt exception). Happy path unchanged (breaks on attempt 1);
+  the unhappy path is bounded at N grounded calls; client-construction faults still fall back via the
+  outer handler. House rule preserved: the LLM proposes, pure code enforces — orgs are never fabricated.
+- **Fix (observability):** the app had **no logging config**, so `advocate.*` WARNING/EXCEPTION (incl. the
+  sourcing fallback) fell through to Python's `lastResort` handler — not reliably captured under the ADK +
+  OpenTelemetry (`trace_to_cloud`) runtime. 14 days / 13 revisions of prod logs showed **zero** `advocate.*`
+  lines despite a known 0-org run, so the failure was invisible. `app.py` now attaches a dedicated stdout
+  handler to the `advocate` logger, so the per-attempt diagnostics (`empty/ungrounded (attempt X/N)` vs
+  `research pass raised`) are queryable in Cloud Logging — the prerequisite to quantifying any residual
+  empties and to verifying this fix in prod.
+
+Files: `agents/config.py` (`SOURCING_FIRST_PASS_ATTEMPTS`), `agents/sourcing.py` (bounded first-pass retry,
+`for/else` fallback), `app.py` (advocate-logger stdout handler), `tests/test_sourcing.py` (+5: transient
+empty / ungrounded / exception recovery + bounded-attempts fallback + all-attempts-raise fallback). Tests +5.
+**266 passed, 1 skipped.** Live-verified: 6/6 raw
+grounded research passes returned ~45 orgs; the new handler routes the fallback WARNING + exception to stdout
+(probe). Not yet deployed (pending approval).
+
 ## 2026-06-07 — Harden MALFORMED_FUNCTION_CALL fix to be model-independent (two layers)
 
 The prior fix relied on the model *choosing* to send a minimal payload; a live run showed it can

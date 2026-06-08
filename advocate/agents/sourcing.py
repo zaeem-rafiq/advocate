@@ -32,6 +32,7 @@ from advocate.agents.config import (
     LOCATION,
     MIN_SOURCED_ORGS,
     PROJECT,
+    SOURCING_FIRST_PASS_ATTEMPTS,
     SOURCING_MAX_ITERATIONS,
     SOURCING_MODEL,
     USE_VERTEX,
@@ -229,21 +230,47 @@ def source_organizations(
                 grounded=findings.grounded or grounding_used(metadatas),
             )
 
-        # First pass once, up front: an unparseable or ungrounded result short-circuits to
-        # the honest fallback before spending refine calls (mirrors prepare_informational).
-        # "grounded" means the model actually ran web searches (grounding metadata present),
-        # NOT that inline citations were collectable: a structured JSON org list has no text
-        # spans to cite, so it yields web_search_queries but ZERO grounding chunks. Gating on
-        # collected citations (prep's prose signal) wrongly discarded a fully grounded list.
-        # (Found in the live deploy check — see DECISIONS/CHANGELOG.)
-        first = research()
-        if not first.orgs or not first.grounded:
+        # First pass with a BOUNDED RETRY, up front, before spending refine calls (mirrors
+        # prepare_informational's short-circuit, but retried). A 0-org / ungrounded first
+        # result is TRANSIENT — on identical params a grounded retry usually recovers (live
+        # check: 6/6 runs returned ~45 orgs) — so retry up to SOURCING_FIRST_PASS_ATTEMPTS
+        # times before the honest seed fallback. Each attempt is independently guarded so a
+        # transient genai/Vertex fault (timeout / 429 / 5xx) is ALSO retried rather than
+        # short-circuiting to seeds; client construction faults still raise to the outer
+        # handler. "grounded" means the model actually ran web searches (grounding metadata
+        # present), NOT that inline citations were collectable: a structured JSON org list has
+        # no text spans to cite, so it yields web_search_queries but ZERO grounding chunks.
+        # Gating on collected citations (prep's prose signal) wrongly discarded a fully
+        # grounded list. (See DECISIONS/CHANGELOG.)
+        first: _SourcingFindings | None = None
+        for attempt in range(SOURCING_FIRST_PASS_ATTEMPTS):
+            try:
+                first = research()
+            except Exception:  # noqa: BLE001 — a per-attempt pass fault is retryable; own it
+                _LOG.warning(
+                    "sourcing research pass raised (attempt %d/%d) for industry=%r geography=%r function=%r",
+                    attempt + 1, SOURCING_FIRST_PASS_ATTEMPTS, industry, geography, function,
+                    exc_info=True,
+                )
+                continue
+            if first.orgs and first.grounded:
+                break
             _LOG.warning(
-                "sourcing fell back for industry=%r geography=%r function=%r: parsed_orgs=%d grounded=%s",
-                industry, geography, function, len(first.orgs), first.grounded,
+                "sourcing first pass empty/ungrounded (attempt %d/%d) for industry=%r geography=%r "
+                "function=%r: parsed_orgs=%d grounded=%s",
+                attempt + 1, SOURCING_FIRST_PASS_ATTEMPTS, industry, geography, function,
+                len(first.orgs), first.grounded,
+            )
+        else:
+            # Loop exhausted without a `break` → no attempt produced grounded orgs → honest
+            # seed fallback (covers parse-empty, not-grounded, and all-attempts-raised).
+            _LOG.warning(
+                "sourcing fell back after %d attempt(s) for industry=%r geography=%r function=%r",
+                SOURCING_FIRST_PASS_ATTEMPTS, industry, geography, function,
             )
             return _fallback()
 
+        # Reached only via `break`, so `first` is the successful (grounded, non-empty) pass.
         result = research_until_sufficient(
             lambda: first, evaluate, refine, max_iterations=SOURCING_MAX_ITERATIONS
         )

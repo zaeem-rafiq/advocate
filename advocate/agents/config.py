@@ -33,3 +33,10 @@ RESEARCH_MAX_ITERATIONS = int(os.environ.get("ADVOCATE_RESEARCH_MAX_ITERATIONS",
 # Max critique-and-refine passes in the Sourcing loop (gap-filling toward the >=40-org
 # target). Same $50-budget rationale and default as the prep loop; tuned independently.
 SOURCING_MAX_ITERATIONS = int(os.environ.get("ADVOCATE_SOURCING_MAX_ITERATIONS", "2"))
+
+# Attempts for the FIRST grounded research pass before honestly falling back to seeds. A
+# 0-org / ungrounded first result is TRANSIENT (verified live: 6/6 identical-param runs
+# returned ~45 orgs), so one bounded retry recovers the common case — covering all three
+# transient modes (parse-empty, not-grounded, a per-attempt genai/Vertex fault) — without
+# unbounded cost. Bounds the unhappy-path spend at N grounded calls. Env-overridable.
+SOURCING_FIRST_PASS_ATTEMPTS = int(os.environ.get("ADVOCATE_SOURCING_FIRST_PASS_ATTEMPTS", "2"))

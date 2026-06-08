@@ -30,7 +30,7 @@ for sourcing). State in Firestore (per-user isolation). Runtime: Cloud Run (scal
 ```bash
 uv venv --python 3.12
 uv pip install pytest pytest-cov google-adk google-cloud-firestore
-uv run --no-project pytest                 # 260 passed, 1 skipped; pure-code core ~100% covered
+uv run --no-project pytest                 # 266 passed, 1 skipped; pure-code core ~100% covered
 python -m advocate.cli                     # offline deterministic tracer-bullet demo
 ```
 

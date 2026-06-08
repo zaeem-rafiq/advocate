@@ -5,6 +5,20 @@ Format: date · decision · rationale · reversible?
 
 ---
 
+## 2026-06-07 — Close the intermittent 0-org sourcing gap (retry first pass + observable logs)
+
+Addresses the "future reliability look" flagged in the advocate-00026-s78 entry below.
+`source_organizations` ran the first grounded research pass **once** and fell back to
+`load_seed_companies` on any empty/ungrounded result. Diagnosed the 0-org case as **transient** (6/6
+live runs on identical params returned 44–50 grounded orgs, `finish=STOP`) and found the existing
+fallback WARNING/EXCEPTION **never reached Cloud Logging** (no logging config anywhere; 14d / 13
+revisions of prod logs showed zero `advocate.*` lines, so the failure was invisible). Fix: bounded
+first-pass retry (`ADVOCATE_SOURCING_FIRST_PASS_ATTEMPTS`, default 2 — covers parse-empty /
+not-grounded / per-attempt transient exception) + a dedicated stdout handler on the `advocate` logger
+in `app.py`. Tests +5 → **266 passed, 1 skipped**; live end-to-end returned 65 grounded orgs. NOT yet
+deployed (pending approval). Reversible: yes (set `ADVOCATE_SOURCING_FIRST_PASS_ATTEMPTS=1` to restore
+single-pass; revert the `app.py` handler).
+
 ## 2026-06-07 — Prod deploy advocate-00026-s78 (model-independent MALFORMED fix) — supersedes 00025
 
 Deployed `main` @ `e135edc` from the merged tree (lesson applied: deploy from merged main, not a
