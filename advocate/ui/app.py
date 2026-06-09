@@ -89,15 +89,35 @@ def _on_connect(f):
 
 # ----- editorial HTML builders (rendered into gr.HTML blocks) -----
 
+def _seal_svg() -> str:
+    """A filled wax-stamp roundel: oxblood disc, cream 'A' monogram, curved micro-type, a fleuron."""
+    return (
+        '<svg class="seal-svg" viewBox="0 0 100 100" role="img" '
+        'aria-label="Advocate seal — the two-hour job search" xmlns="http://www.w3.org/2000/svg">'
+        '<defs><path id="seal-arc" d="M50 50 m-39 0 a39 39 0 0 1 78 0"/></defs>'
+        '<circle cx="50" cy="50" r="48" class="seal-disc"/>'
+        '<circle cx="50" cy="50" r="44" class="seal-ringline"/>'
+        '<circle cx="50" cy="50" r="35" class="seal-ringline"/>'
+        '<text class="seal-ring"><textPath href="#seal-arc" startOffset="50%" '
+        'text-anchor="middle">THE TWO-HOUR JOB SEARCH</textPath></text>'
+        '<text x="50" y="51" class="seal-mono" text-anchor="middle" dominant-baseline="central">A</text>'
+        '<text x="50" y="83" class="seal-fleuron" text-anchor="middle">&#10087;</text>'
+        '</svg>'
+    )
+
+
 def _masthead_html() -> str:
     return (
-        '<header class="masthead"><div class="masthead-top">'
-        '<h1 class="wordmark"><span class="glyph-a">A</span>dvocate<span class="dot">.</span></h1>'
-        '<div class="masthead-meta"><div class="issue">The two-hour job search</div>'
-        '<div class="vol">A guided sprint</div></div></div>'
-        '<p class="tagline">Stop applying into the void. We help you find the few employers worth your '
-        'time — then write to a <em>real person</em> inside them. You decide. You send. Nothing leaves '
-        'your hands automatically.</p></header>'
+        '<header class="masthead">'
+        '<div class="dateline"><span>A guided sprint</span>'
+        '<span class="fleuron">&#10087;</span>'
+        '<span>After Steve Dalton’s method</span></div>'
+        '<div class="nameplate-row">'
+        '<h1 class="wordmark">Advocate<span class="dot">.</span></h1>'
+        f'<div class="seal">{_seal_svg()}</div></div>'
+        '<p class="tagline"><span class="dropcap">S</span>top applying into the void. We help you find '
+        'the few employers worth your time — then write to a <em>real person</em> inside them. You decide. '
+        'You send. Nothing leaves your hands automatically.</p></header>'
     )
 
 

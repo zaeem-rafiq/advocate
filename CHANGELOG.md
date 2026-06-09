@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-06-09 — X-factor pass: dark "cover plate" masthead, wax seal, folio numerals
+
+The editorial UI read clean but flat. This pass adds tactile print-craft "x-factor" while keeping the
+ink-on-paper soul — and fixes a real masthead bug. No agent/pipeline behavior changed; the rate-10 gate,
+draft-only guarantee, and all hardening are intact. Files: `advocate/ui/{theme.py,app.py}`.
+
+- **Fixed the missing "A".** The wordmark was `display:inline-flex; align-items:baseline`, which blockified
+  the single-glyph `<span class="glyph-a">` and let Safari + `font-optical-sizing:auto` displace the leading
+  "A" off-screen. It's now plain inline text with a `::first-letter` weight bump — robust across browsers.
+- **Dark cover-plate masthead.** The nameplate sits on a full-column deep-ink band (tonal gradient, printed-
+  edge highlights, a warm top glow, a lift shadow onto the paper) with a cream cover-scale wordmark, a
+  reversed **wax seal** (inline-SVG oxblood disc + cream "A" monogram + curved micro-type + fleuron), an
+  oxblood **drop cap**, a ruled dateline band, and a thick+thin double rule. A brighter clay accent
+  (`--accent-bright`) carries the oxblood onto the dark.
+- **Editorial body.** Paper **grain** (fixed SVG-noise tooth), big **oxblood folio numerals** on the section
+  heads, **oldstyle figures** on serif numerals, larger roster company names + rank numerals, more card depth.
+
+Verified live (Playwright, seed mode): full Connect→Source→Rate flow, 24-row roster. WCAG AA contrast holds
+on **both** the dark band (wordmark 15.5:1, tagline 15.5:1, clay accent 5.15:1) and the paper body (0 fails).
+Caught + fixed dark-band dateline labels rendering invisible (Gradio styles bare `<span>` color directly).
+No horizontal scroll at 390px. **310 passed, 1 skipped.** Known: mobile content collapses to the wordmark's
+min-content width (Gradio flex/cascade quirk; its `!important` layout rules can't be overridden from app CSS)
+— readable, no scroll; desktop is the demo target.
+
 ## 2026-06-08 — Accessibility: WCAG AA contrast + masthead h1 + rater radiogroup
 
 Closed the three app-owned a11y findings from a fresh WCAG 2 A/AA re-scan of the editorial redesign (the old
