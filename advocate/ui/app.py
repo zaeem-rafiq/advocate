@@ -383,7 +383,11 @@ def _on_rank(ratings_json, records):
         gr.update(value=_ranked_html(ranked)),
         gr.update(choices=choices, value=selected),                          # outreach_company
         gr.update(choices=[o["company"] for o in ranked], value=selected),   # prep_company
-        gr.update(interactive=gate["unlocked"]),                             # draft_btn
+        # The gate beat: once unlocked, the Draft CTA stops being a generic disabled control and
+        # arms with the specific top pick — "Draft my note to {top} →". Locked → reset + disabled.
+        (gr.update(interactive=True, value=f"Draft my note to {selected} →")
+         if gate["unlocked"] and selected else
+         gr.update(interactive=False, value="Draft outreach email")),       # draft_btn
     )
 
 
@@ -395,28 +399,43 @@ def _on_draft(company, background, ranked, request: gr.Request = None):
     client-supplied), NOT an authorization boundary — the boundary is Cloud Run + IAP, re-asserted
     here by the fail-closed _iap_blocked check so this grounded (cost-bearing) endpoint can't run
     unauthenticated if IAP is ever misconfigured.
+
+    Streams a WORKING dock (4th output) around the grounded draft call — the seal sweeps while the
+    note is composed, then settles. Error/guard branches yield a resting dock so the seal never
+    hangs spinning.
     """
     if _iap_blocked(request):
-        return (_draft_note("Not authenticated — reach this service through Google sign-in (IAP)."),
-                gr.update(value=""), {})
+        yield (_draft_note("Not authenticated — reach this service through Google sign-in (IAP)."),
+               gr.update(value=""), {}, _dock_html())
+        return
     if not pipeline.gate_status(ranked or [], _ranked_motivations(ranked))["unlocked"]:
         rated = sum(1 for o in (ranked or []) if o.get("motivation") is not None)
-        return (_draft_note(f"Outreach is locked — rate at least {pipeline.OUTREACH_RATING_THRESHOLD} "
-                            f"companies on the Rate step first (you’ve rated {rated})."), gr.update(value=""), {})
+        yield (_draft_note(f"Outreach is locked — rate at least {pipeline.OUTREACH_RATING_THRESHOLD} "
+                           f"companies on the Rate step first (you’ve rated {rated})."),
+               gr.update(value=""), {}, _dock_html())
+        return
     if not company:
-        return (_draft_note("Pick a company on the Rank step first."), gr.update(value=""), {})
+        yield (_draft_note("Pick a company on the Rank step first."), gr.update(value=""), {}, _dock_html())
+        return
     contact = pipeline.starter_contact(company)
     if not contact.get("found"):
-        return (_draft_note(f"No connected contact found at {company} — pick another company or add a "
-                            "contact to your alumni CSV. Advocate never invents a contact."),
-                gr.update(value=""), {})
+        yield (_draft_note(f"No connected contact found at {company} — pick another company or add a "
+                           "contact to your alumni CSV. Advocate never invents a contact."),
+               gr.update(value=""), {}, _dock_html())
+        return
+    # Grounded, cost-bearing: show the seal at work while the note is composed.
+    yield (_draft_note(f"Composing a compliant note to {contact['contact_name']} at {company}…"),
+           gr.update(value=""), {},
+           _dock_html(working=True, status=f"Composing your note to {contact['contact_name']}…"))
     result = pipeline.draft_email(contact["contact_name"], company, background or "a job seeker", contact["connection"])
     if not result.get("passed"):
-        return (_draft_note(f"Couldn’t produce a compliant draft for {contact['contact_name']} at {company}: "
-                            f"{result.get('error', 'unknown error')}. Try Regenerate."), gr.update(value=""), {})
+        yield (_draft_note(f"Couldn’t produce a compliant draft for {contact['contact_name']} at {company}: "
+                           f"{result.get('error', 'unknown error')}. Try Regenerate."),
+               gr.update(value=""), {}, _dock_html())
+        return
     meta = {"company": company, "contact": contact["contact_name"]}
     head = _draft_head_html(contact["contact_name"], contact.get("title", ""), company, result.get("word_count"))
-    return (head, gr.update(value=result["email"]), meta)
+    yield (head, gr.update(value=result["email"]), meta, _dock_html())
 
 
 def _on_approve(draft_text, meta):
@@ -442,14 +461,19 @@ def _on_discard():
 
 
 def _on_prep(company, role, request: gr.Request = None):
-    """Cited research brief + five TIARA questions for an informational interview."""
+    """Cited research brief + five TIARA questions for an informational interview.
+
+    Streams a WORKING dock (2nd output) around the grounded research call — the seal sweeps while
+    the brief is gathered, then settles. Guard branches yield a resting dock.
+    """
     if _iap_blocked(request):
-        yield "Not authenticated — reach this service through Google sign-in (IAP)."
+        yield ("Not authenticated — reach this service through Google sign-in (IAP).", _dock_html())
         return
     if not company:
-        yield "Pick a ranked company above, or type a company name, then prepare."
+        yield ("Pick a ranked company above, or type a company name, then prepare.", _dock_html())
         return
-    yield "Researching the company (grounded Gemini)… up to about a minute."
+    yield ("Researching the company (grounded Gemini)… up to about a minute.",
+           _dock_html(working=True, status=f"Researching {company} for your interview…"))
     result = pipeline.prep(company, (role or "this role").strip())
     q = result.get("questions", {})
     caveat = ""
@@ -461,7 +485,7 @@ def _on_prep(company, role, request: gr.Request = None):
                              for cat in ["Trends", "Insights", "Advice", "Resources", "Assignments"])
     # _md_escape the user-typed company so it can't inject Markdown/links into the heading.
     yield (f"### {_md_escape(company)} — informational brief\n\n{result.get('brief','')}"
-           f"\n\n### TIARA questions\n{questions_md}{caveat}")
+           f"\n\n### TIARA questions\n{questions_md}{caveat}", _dock_html())
 
 
 def build_app() -> gr.Blocks:
@@ -606,12 +630,13 @@ def build_app() -> gr.Blocks:
         rank_btn.click(_on_rank, inputs=[ratings_json, records_state],
                        outputs=[gate_status, ranked_state, ranked_view, outreach_company, prep_company, draft_btn])
         draft_btn.click(_on_draft, inputs=[outreach_company, background_in, ranked_state],
-                        outputs=[draft_status, draft_box, meta_state])
+                        outputs=[draft_status, draft_box, meta_state, masthead], show_progress="hidden")
         regen_btn.click(_on_draft, inputs=[outreach_company, background_in, ranked_state],
-                        outputs=[draft_status, draft_box, meta_state])
+                        outputs=[draft_status, draft_box, meta_state, masthead], show_progress="hidden")
         approve_btn.click(_on_approve, inputs=[draft_box, meta_state], outputs=[approve_status, cadence_view])
         discard_btn.click(_on_discard, outputs=[draft_status, draft_box, meta_state, approve_status, cadence_view])
-        prep_btn.click(_on_prep, inputs=[prep_company, prep_role], outputs=[prep_view])
+        prep_btn.click(_on_prep, inputs=[prep_company, prep_role], outputs=[prep_view, masthead],
+                       show_progress="hidden")
 
     return demo
 

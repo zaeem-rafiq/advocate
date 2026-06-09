@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-06-09 — Agentic Phase B close-out: working seal on every grounded call + the gate beat
+
+Finished the "standing Advocate" agentic layer (Phase B). The dock's wax seal now visibly *works* during
+all three grounded Gemini calls, and clearing the rate-10 gate arms a named call-to-action. No agent/pipeline
+behavior, draft-only guarantee, or IAP/upload/parse_ratings hardening changed. Files: `advocate/ui/app.py`,
+`tests/test_ui_handlers.py`.
+
+- **Working seal on Draft + Prep.** `_on_draft` (was blocking) and `_on_prep` are now generators that stream a
+  `working` dock (the seal sweeps an oxblood arc, the dock narrates *"Composing your note to {contact}…"* /
+  *"Researching {company} for your interview…"*) around the cost-bearing call, then settle. Source already had
+  this. Guard/error branches yield a resting dock so the seal never hangs. Both Draft clicks + Prep use
+  `show_progress="hidden"` so the seal is the *only* indicator (no Gradio overlay). Reduced-motion → static ring.
+- **The gate beat.** When the rate-10 gate unlocks, `_on_rank` stops showing a generic disabled "Draft outreach
+  email" and arms the CTA to **"Draft my note to {top} →"** — named for the user's #1 Active-Five pick. Locked
+  resets it to the disabled generic label. The gate enforcement itself is unchanged (still re-checked in `_on_draft`).
+- **Tests:** 317 passed / 1 skipped. New: `test_on_rank_unlocked_arms_the_cta_with_the_top_pick`,
+  `test_on_prep_drives_the_working_seal`; working-seal assertions added to the draft path; all `_on_draft`/`_on_prep`
+  call sites migrated to consume the generators (4-tuple / 2-tuple).
+
 ## 2026-06-09 — X-factor pass: dark "cover plate" masthead, wax seal, folio numerals
 
 The editorial UI read clean but flat. This pass adds tactile print-craft "x-factor" while keeping the

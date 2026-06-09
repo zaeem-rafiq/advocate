@@ -9,18 +9,18 @@ Grounded facts: `_nav_updates(target)` is the single nav chokepoint. Sourced rec
 `rationale` + `lenses` (pipeline.py:114-116) — receipts are pure-render. `_on_source`/`_on_prep` are
 generators (can yield seal states); `_on_draft` is blocking (convert to generator). Masthead ~340px.
 
-## Phase A — the shell + dock (layout only, zero pipeline change)
-- [ ] `_dock_html()` compact masthead (slim cover-ink bar: small seal + "Advocate" + brief/chronicle slots)
-- [ ] `_nav_updates` also returns the masthead update (full on step 0, dock on 1–6); add `masthead` to nav_outputs
-- [ ] CSS: `.mast-compact`/`.dock`; roster internal `overflow:auto` + max-height; tighten sec-head/colophon/container margins
-- [ ] Fix the horizontal scrollbar under the full-bleed cover band
-- [ ] Verify: each non-roster step fits viewport (no page scroll) at 1280 + 1440; roster scrolls internally; `/design-review`
+## Phase A — the shell + dock (layout only, zero pipeline change) ✅ shipped rev 00013/00014
+- [x] `_dock_html()` compact masthead (slim cover-ink bar: small seal + "Advocate" + brief/chronicle slots)
+- [x] `_nav_updates` also returns the masthead update (full on step 0, dock on 1–6); add `masthead` to nav_outputs
+- [x] CSS: `.mast-compact`/`.dock`; roster internal `overflow:auto` + max-height; tighten sec-head/colophon/container margins
+- [x] Fix the horizontal scrollbar under the full-bleed cover band (`#adv-masthead overflow:visible`)
+- [x] Verify: each non-roster step fits viewport; roster scrolls internally; `/design-review` (Chrome-confirmed on the live IAP app)
 
-## Phase B — working seal + receipts (agentic core, existing data)
-- [ ] Seal `working`/`resting` on the 3 grounded calls (yields; `_on_draft`→generator); reduced-motion = static "At work"
-- [ ] Render `rationale` + `lenses` as a collapsible margin note per Rate row (blank when empty — seed mode)
-- [ ] Rate-10 gate hero beat: locked CTA → armed "Draft my note to {top} →" on the 10th rating
-- [ ] Approval as a visible draft-only countersign
+## Phase B — working seal + receipts (agentic core, existing data) ✅ complete
+- [x] Seal `working`/`resting` on the 3 grounded calls — Source (rev 00014) + Draft + Prep (this turn; `_on_draft`/`_on_prep`→generators, masthead 4th/2nd output); reduced-motion = static ring
+- [x] Render `rationale` + `lenses` as a per-Rate-row receipt (blank when empty — seed mode); domain-aware `merge_orgs` root-cause fix
+- [x] Rate-10 gate hero beat: locked CTA → armed "Draft my note to {top} →" on the 10th rating (`_on_rank`)
+- [x] Approval as a visible draft-only countersign (`_on_approve`)
 
 ## Phase C — chronicle + memory + auto-advance
 - [ ] `chronicle` gr.State appended by handlers (real events only); render in dock tray + colophon
@@ -29,6 +29,21 @@ generators (can yield seal states); `_on_draft` is blocking (convert to generato
 
 ## Phase D — command line (highest risk, ship last)
 - [ ] Deterministic NL→param intent router; confirm-before-fire on any grounded re-run
+
+### Review — Phase B close-out (2026-06-09)
+- **What changed:** `_on_draft`→generator (4th output `masthead`) and `_on_prep`→2-tuple yields, so the dock
+  wax seal sweeps + narrates ("Composing your note to {contact}…" / "Researching {company}…") around the two
+  remaining grounded calls, then settles — Source already had this (rev 00014). The gate beat: `_on_rank` now
+  arms the Draft CTA to **"Draft my note to {top} →"** at the rate-10 threshold (locked → generic disabled
+  label). Wired both draft clicks + prep with `show_progress="hidden"` so the seal is the only indicator.
+- **Verification:** 317 passed / 1 skipped (`.venv` 3.12) — incl. new `test_on_rank_unlocked_arms_the_cta_with_the_top_pick`,
+  `test_on_prep_drives_the_working_seal`, working-seal assertions folded into the draft tests; all draft/prep
+  generator call sites migrated. `build_app()` constructs the full graph (proves the new `masthead` outputs +
+  scope); generator arities runtime-checked (draft=4, prep=2). Local seed server served 200.
+- **Issues found:** Live browser visual confirm was blocked by a shared-Playwright tab race (concurrent
+  worktrees churn the same browser instance) — tooling-only; behavior is server-side-deterministic + unit-covered,
+  and the seal's visual (`data-state="working"`→`dock-sweep`) was design-reviewed when introduced (rev 00014).
+- **Next:** Phase C (chronicle `gr.State` + remembered-brief + auto-advance on satisfied gates), then Phase D.
 
 ### Constraints (never break)
 draft-only is structural (no send path ever) · rate-10 gate · IAP/upload/parse_ratings hardening ·

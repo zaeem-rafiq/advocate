@@ -56,6 +56,16 @@ def test_on_source_drives_the_working_seal(monkeypatch):
     assert 'data-state="working"' not in out[-1][4]  # settles when the roster lands
 
 
+def test_on_prep_drives_the_working_seal(monkeypatch):
+    """Prep sweeps the dock seal (2nd output) while researching, then settles when the brief lands."""
+    monkeypatch.delenv("REQUIRE_IAP", raising=False)
+    monkeypatch.setattr(pipeline, "prep",
+                        lambda c, r: {"brief": "ok", "questions": {}, "grounded": True, "depth": "deep"})
+    out = list(app._on_prep("Acme", "PM"))
+    assert 'data-state="working"' in out[0][1] and "Researching Acme" in out[0][1]
+    assert 'data-state="working"' not in out[-1][1]  # settles when the brief lands
+
+
 # ----- _on_rank: rate-10 gate -----
 
 def test_on_rank_locked_below_threshold():
@@ -66,15 +76,19 @@ def test_on_rank_locked_below_threshold():
     assert "7" in msg and "more to unlock" in msg.lower()  # 10 - 3 = 7 remaining
     assert len(ranked) == 12
     assert draft_btn.get("interactive") is False  # Draft button stays DISABLED while locked
+    assert draft_btn.get("value") == "Draft outreach email"  # CTA stays its generic locked label
 
 
-def test_on_rank_unlocked_at_threshold():
+def test_on_rank_unlocked_arms_the_cta_with_the_top_pick():
+    """The gate beat: at threshold the Draft CTA arms with the specific #1 company, not a generic label."""
     records = [_rec(f"C{i}") for i in range(12)]
     ratings = json.dumps({f"C{i}": 4 for i in range(10)})  # 10 rated
     msg, ranked, _html, _outreach, _prep, draft_btn = app._on_rank(ratings, records)
     assert "unlocked" in msg.lower()
     assert ranked[0]["motivation"] == 4  # a rated org sorts to the top
     assert draft_btn.get("interactive") is True  # Draft button enabled once unlocked
+    top = ranked[0]["company"]
+    assert draft_btn.get("value") == f"Draft my note to {top} →"  # armed with the named top pick
 
 
 def test_on_discard_resets_downstream_state():
@@ -92,19 +106,19 @@ _UNLOCKED = [{"company": f"C{i}", "motivation": 5} for i in range(10)]
 
 def test_on_draft_locked_until_ten_rated():
     ranked = [{"company": f"C{i}", "motivation": (5 if i < 3 else None)} for i in range(12)]  # 3 rated
-    status, _draft, meta = app._on_draft("C0", "bg", ranked)
+    status, _draft, meta, _dock = list(app._on_draft("C0", "bg", ranked))[-1]
     assert "locked" in status.lower() and "rate at least 10" in status.lower()
     assert meta == {}  # no draft produced while locked — the gate is enforced, not cosmetic
 
 
 def test_on_draft_requires_a_company_when_unlocked():
-    status, _draft, meta = app._on_draft("", "bg", _UNLOCKED)
+    status, _draft, meta, _dock = list(app._on_draft("", "bg", _UNLOCKED))[-1]
     assert "Rank" in status and meta == {}
 
 
 def test_on_draft_no_contact_found(monkeypatch):
     monkeypatch.setattr(pipeline, "starter_contact", lambda c: {"found": False})
-    status, _draft, meta = app._on_draft("Acme", "bg", _UNLOCKED)
+    status, _draft, meta, _dock = list(app._on_draft("Acme", "bg", _UNLOCKED))[-1]
     assert "No connected contact" in status and meta == {}
 
 
@@ -112,8 +126,11 @@ def test_on_draft_non_compliant_shows_error_not_draft(monkeypatch):
     monkeypatch.setattr(pipeline, "starter_contact",
                         lambda c: {"found": True, "contact_name": "Maya", "title": "PM", "connection": "alum"})
     monkeypatch.setattr(pipeline, "draft_email", lambda *a: {"passed": False, "error": "too long"})
-    status, _draft, meta = app._on_draft("Acme", "bg", _UNLOCKED)
+    out = list(app._on_draft("Acme", "bg", _UNLOCKED))
+    assert any('data-state="working"' in o[3] for o in out)  # the seal swept while composing
+    status, _draft, meta, dock = out[-1]
     assert "compliant draft" in status.lower() and "regenerate" in status.lower() and meta == {}
+    assert 'data-state="working"' not in dock  # ...and settled back on the error
 
 
 def test_on_draft_success_sets_meta(monkeypatch):
@@ -121,7 +138,10 @@ def test_on_draft_success_sets_meta(monkeypatch):
                         lambda c: {"found": True, "contact_name": "Maya", "title": "PM", "connection": "alum"})
     monkeypatch.setattr(pipeline, "draft_email",
                         lambda *a: {"passed": True, "email": "Hi Maya, ...", "word_count": 80, "attempts": 1})
-    status, _draft, meta = app._on_draft("Acme", "bg", _UNLOCKED)
+    out = list(app._on_draft("Acme", "bg", _UNLOCKED))
+    assert 'data-state="working"' in out[-2][3]   # seal sweeps while composing the note
+    status, _draft, meta, dock = out[-1]
+    assert 'data-state="working"' not in dock     # settles when the draft lands
     assert meta == {"company": "Acme", "contact": "Maya"}
     assert "Maya" in status and "Acme" in status
 
@@ -188,14 +208,14 @@ def _unauth():
 
 def test_on_draft_blocks_unauthenticated_when_iap_required(monkeypatch):
     monkeypatch.setenv("REQUIRE_IAP", "1")
-    status, _draft, meta = app._on_draft("Acme", "bg", _UNLOCKED, _unauth())
+    status, _draft, meta, _dock = list(app._on_draft("Acme", "bg", _UNLOCKED, _unauth()))[-1]
     assert "not authenticated" in status.lower() and meta == {}
 
 
 def test_on_prep_blocks_unauthenticated_when_iap_required(monkeypatch):
     monkeypatch.setenv("REQUIRE_IAP", "1")
     out = list(app._on_prep("Acme", "PM", _unauth()))
-    assert len(out) == 1 and "not authenticated" in out[0].lower()
+    assert len(out) == 1 and "not authenticated" in out[0][0].lower()
 
 
 def test_all_grounded_handlers_fail_closed_without_iap(monkeypatch):
@@ -204,8 +224,8 @@ def test_all_grounded_handlers_fail_closed_without_iap(monkeypatch):
     # If any handler ran its grounded call, these unconfigured pipeline fns would error — proving
     # the guard short-circuits *before* the cost-bearing path.
     assert "authenticated" in list(app._on_source("climate", "NYC", "PM", _unauth()))[0][0].lower()
-    assert "authenticated" in app._on_draft("Acme", "bg", _UNLOCKED, _unauth())[0].lower()
-    assert "authenticated" in list(app._on_prep("Acme", "PM", _unauth()))[0].lower()
+    assert "authenticated" in list(app._on_draft("Acme", "bg", _UNLOCKED, _unauth()))[0][0].lower()
+    assert "authenticated" in list(app._on_prep("Acme", "PM", _unauth()))[0][0].lower()
 
 
 # ----- _on_prep: untrusted output rendering (review MEDIUM-1) -----
@@ -215,7 +235,7 @@ def test_on_prep_escapes_user_typed_company_in_heading(monkeypatch):
     monkeypatch.setattr(pipeline, "prep",
                         lambda c, r: {"brief": "ok", "questions": {}, "grounded": True, "depth": "deep"})
     out = list(app._on_prep("Acme [x](javascript:alert(1))", "PM"))
-    final = out[-1]
+    final = out[-1][0]
     assert "informational brief" in final
     assert "](javascript:" not in final  # injected Markdown link syntax is neutralized
 
