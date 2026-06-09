@@ -202,13 +202,22 @@ def _rate_html(records: list, ratings: dict | None = None) -> str:
             rater_cls, data_val, cell_cls, hint, cursor_placed = "rater empty", "", "", "Your turn", True
         else:
             rater_cls, data_val, cell_cls, hint = "rater", "", "", "Your turn"
+        # the agent's receipt: WHY this employer surfaced (rationale) + which LAMP lenses. Both are
+        # already computed during sourcing (blank in seed mode) — surface it, never invent it.
+        rlenses = " · ".join(_esc(l) for l in (r.get("lenses") or [])[:3])
+        why = _esc(r.get("rationale", "") or "")
+        receipt = ""
+        if rlenses or why:
+            parts = (f'<span class="r-lens">{rlenses}</span>' if rlenses else "") + \
+                    (f'<span class="r-why">{why}</span>' if why else "")
+            receipt = f'<div class="receipt">{parts}</div>'
         rows.append(
             '<article class="row">'
             f'<div class="rank">{i:02d}</div>'
             f'<div class="body"><div class="co">{co}</div><div class="sector">{sector}</div>'
             '<div class="signals"><span class="sig">Postings '
             f'<span class="bars {pcls}"><i></i><i></i><i></i></span><span class="val">{plabel}</span></span>'
-            f'{alum}</div></div>'
+            f'{alum}</div>{receipt}</div>'
             f'<div class="rate-cell{cell_cls}">'
             f'<div class="{rater_cls}" data-company="{co}"{data_val} role="radiogroup" aria-label="Rate {co}">{buttons}</div>'
             f'<div class="hint">{hint}</div></div></article>'
@@ -486,8 +495,11 @@ def build_app() -> gr.Blocks:
                         background_in = gr.Textbox(label="One line about you",
                                                    placeholder="e.g. a Columbia MBA from consulting into climate product",
                                                    max_lines=1, elem_classes=["adv-field"])
-                alumni_csv = gr.File(label="Bring your alumni network — a CSV (optional; seeded data backs the demo)",
-                                     file_types=[".csv"], elem_id="adv-upload")
+                # A single clean line (UploadButton) instead of gr.File's tall dropzone — clean + short,
+                # and it doesn't fight Gradio's File layout. The CSV is optional; seeded data backs the demo.
+                alumni_csv = gr.UploadButton("Attach your alumni network — CSV, optional",
+                                             file_types=[".csv"], elem_id="adv-upload",
+                                             elem_classes=["adv-upload-btn"])
             connect_status = gr.Markdown("", elem_classes=["adv-status"])
         groups.append(g0)
 
@@ -567,7 +579,7 @@ def build_app() -> gr.Blocks:
         gr.HTML(_colophon_html(), elem_id="adv-colophon")
 
         # ----- wiring (handlers are module-level for testability) -----
-        alumni_csv.change(_on_connect, inputs=[alumni_csv], outputs=[connect_status])
+        alumni_csv.upload(_on_connect, inputs=[alumni_csv], outputs=[connect_status])
 
         nav_outputs = groups + rail_buttons + [step, masthead]
         for i, button in enumerate(rail_buttons):

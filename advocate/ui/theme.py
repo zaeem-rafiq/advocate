@@ -252,12 +252,9 @@ footer { display: none !important; }
 }
 .adv-field input::placeholder, .adv-field textarea::placeholder { color: var(--ink-ghost) !important; font-style: italic; }
 .adv-field input:focus, .adv-field textarea:focus { border-bottom-color: var(--accent) !important; outline: none !important; }
-#adv-upload { background: var(--paper-sunk) !important; border: none !important; border-top: 1px solid var(--rule) !important; border-radius: 0 0 10px 10px !important; min-height: 0 !important; }
-/* Gradio floats the gr.File label (position:absolute), so on a compacted dropzone it overlaps the
-   centered "Drop File Here / Click to Upload". Pin it to normal flow above a slim dropzone. */
-#adv-upload label.float { position: static !important; background: transparent !important; border: none !important; box-shadow: none !important; padding: 12px 16px 0 !important; font-size: 13px !important; }
-#adv-upload .wrap { min-height: 0 !important; padding: 12px 14px 16px !important; }
-#adv-upload .wrap, #adv-upload label { font-family: var(--read) !important; color: var(--ink-faint) !important; }
+/* the alumni-CSV upload as a single slim editorial line (gr.UploadButton, not a tall dropzone) */
+#adv-upload.adv-upload-btn { background: var(--paper-sunk) !important; color: var(--ink-faint) !important; border: 1px dashed var(--rule-strong) !important; border-radius: 8px !important; box-shadow: none !important; font-family: var(--read) !important; font-style: italic !important; font-size: 13.5px !important; font-weight: 400 !important; letter-spacing: 0 !important; padding: 11px 16px !important; min-height: 0 !important; height: auto !important; width: 100% !important; justify-content: flex-start !important; margin: 6px 0 2px !important; transition: border-color .2s, color .2s !important; }
+#adv-upload.adv-upload-btn:hover { border-color: var(--ink-faint) !important; color: var(--ink-soft) !important; }
 
 /* ---------- RATE — the hero roster ---------- */
 .rate-progress { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding: 0 2px 18px; border-bottom: 1.5px solid var(--ink); margin-bottom: 4px; }
@@ -294,6 +291,10 @@ footer { display: none !important; }
 .alum.yes { color: var(--affirm); }
 .alum.no { color: var(--ink-ghost); }
 .alum .who { font-family: var(--read); font-style: italic; font-weight: 400; font-size: 13.5px; letter-spacing: 0; text-transform: none; }
+/* the agent's receipt — why this employer surfaced + which LAMP lens(es). Shown only when grounded. */
+.receipt { margin-top: 9px; display: flex; align-items: baseline; gap: 11px; max-width: 560px; }
+.receipt .r-lens { flex: 0 0 auto; font-family: var(--sans); font-size: 9.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); white-space: nowrap; padding-top: 1px; }
+.receipt .r-why { font-family: var(--read); font-style: italic; font-size: 13px; line-height: 1.42; color: var(--ink-faint); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
 .rater { display: inline-flex; align-items: stretch; border: 1px solid var(--rule-strong); border-radius: 9px; overflow: hidden; background: var(--paper-card); box-shadow: inset 0 1px 0 rgba(255,255,255,.6); }
 .rater button { appearance: none; border: none; background: transparent; border-left: 1px solid var(--rule); width: 38px; height: 42px; font-family: var(--serif); font-weight: 440; font-size: 17px; color: var(--ink-faint); cursor: pointer; font-feature-settings: "tnum" 1; transition: background .15s, color .15s; }

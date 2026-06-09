@@ -19,6 +19,23 @@ def _rec(company, posting=2, alum=False):
             "lenses": ["dream_peers"], "rationale": "why"}
 
 
+# ----- Rate roster: the agent's "why it surfaced" receipt -----
+
+def test_rate_html_shows_the_why_receipt_when_grounded():
+    """Each Rate row surfaces WHY it surfaced (rationale) + its LAMP lenses — when grounded."""
+    html = app._rate_html([_rec("Helio Grid", posting=3, alum=True)])
+    assert 'class="receipt"' in html
+    assert "dream_peers" in html   # the lens label
+    assert "why" in html           # the rationale text
+
+
+def test_rate_html_omits_receipt_in_seed_mode():
+    """Seed records carry no rationale/lenses — the receipt is absent (never invented)."""
+    seed = {"company": "Acme", "sector": "X", "posting_score": 1, "has_alumni": False,
+            "lenses": [], "rationale": ""}
+    assert 'class="receipt"' not in app._rate_html([seed])
+
+
 # ----- _on_rank: rate-10 gate -----
 
 def test_on_rank_locked_below_threshold():
