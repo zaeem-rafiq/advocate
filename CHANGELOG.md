@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-06-09 — Phase C: the standing agent's worklog (remembered brief, chronicle, auto-advance)
+
+The "standing Advocate" now has memory and momentum. A single immutable `worklog_state` ({brief, chronicle})
+is threaded through every dock-rendering handler. No agent/pipeline behavior, draft-only guarantee, or
+IAP/upload/parse_ratings hardening changed. Files: `advocate/ui/{app.py,theme.py}`, `tests/test_ui_handlers.py`.
+
+- **Remembered brief.** At Source, the dock speaks the aim back — *"Watching for {function} in {industry},
+  around {geography}."* — and carries it on every step (`_nav_updates(target, worklog)`), ellipsized if long.
+- **Chronicle ledger.** Handlers append REAL events only (Sourced N / Countersigned / Prepared — never transient
+  drafts). The count shows as a dock chip (*"N on your behalf"*); the list renders as a letterpress
+  *"On your behalf"* ledger above the colophon. Capped (`_CHRONICLE_CAP=12` + `max-height`) so it never grows
+  the page.
+- **Auto-advance on satisfied gates only.** Source→Rate (once employers land) and Approve→3B7 (once
+  countersigned) via Gradio `.then` chains; never advances past a locked gate.
+- **Fixed a pre-existing no-scroll bug.** The ledger surfaced that the Rate roster reserved `calc(100vh - 358px)`
+  while the non-roster column is ~720px — so Rate overflowed ~310px at every viewport height (Phase A's no-scroll
+  didn't actually hold). Recalibrated to `calc(100vh - 720px)`; verified `overflowBy: 0` at 1204px with the roster
+  scrolling internally.
+- **Tests:** 325 passed / 1 skipped (+8 Phase C). `/design-review`: PASS. Live-verified (plugin-playwright, seed).
+
 ## 2026-06-09 — Agentic Phase B close-out: working seal on every grounded call + the gate beat
 
 Finished the "standing Advocate" agentic layer (Phase B). The dock's wax seal now visibly *works* during

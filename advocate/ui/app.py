@@ -151,6 +151,44 @@ def _dock_html(brief: str = "", chronicle_count: int = 0, working: bool = False,
     )
 
 
+# ----- worklog: the standing agent's memory (Phase C) -----
+# A single immutable {"brief": str, "chronicle": [str]} threaded through every dock-rendering handler.
+# `brief` is the remembered aim (spoken back in the dock); `chronicle` is the ledger of REAL actions the
+# agent took on the user's behalf (sourced/countersigned/prepared — never transient drafts).
+
+_CHRONICLE_CAP = 12  # keep the ledger bounded; show the most recent dozen real events
+
+
+def _update_worklog(worklog: dict | None, *, brief: str | None = None, event: str | None = None) -> dict:
+    """Return a NEW worklog with brief set (if given) and/or event appended (immutable — never mutate)."""
+    wl = worklog or {}
+    chron = list(wl.get("chronicle") or [])
+    if event:
+        chron.append(event)
+    return {"brief": brief if brief is not None else wl.get("brief", ""),
+            "chronicle": chron[-_CHRONICLE_CAP:]}
+
+
+def _dock_from(worklog: dict | None, working: bool = False, status: str = "") -> str:
+    """Render the docked masthead carrying the worklog's brief + chronicle count."""
+    wl = worklog or {}
+    return _dock_html(brief=wl.get("brief", ""), chronicle_count=len(wl.get("chronicle") or []),
+                      working=working, status=status)
+
+
+def _brief_line(industry: str, function: str, geography: str) -> str:
+    """The remembered aim spoken back: "Watching for {function} in {industry}, around {geography}." """
+    industry = (industry or "").strip()
+    function = (function or "").strip()
+    geography = (geography or "").strip()
+    if not (industry or function):
+        return ""
+    role = function or "roles"
+    scope = f" in {industry}" if industry else ""
+    where = f", around {geography}" if geography else ""
+    return f"Watching for {role}{scope}{where}."
+
+
 def _sec_head(rule_no: str, num: str, title: str, sub: str) -> str:
     return (
         f'<div class="sec-head"><div class="sec-index"><span class="rule-no">{_esc(rule_no)}</span>{_esc(num)}</div>'
@@ -280,15 +318,26 @@ def _draft_note(text: str) -> str:
     return f'<div class="draft-head"><div class="to">{_esc(text)}</div></div>'
 
 
-def _colophon_html() -> str:
+def _colophon_html(chronicle: list | None = None) -> str:
+    """The footer mark + tagline, with the agent's "On your behalf" ledger above it when non-empty."""
+    events = [e for e in (chronicle or []) if e]
+    ledger = ""
+    if events:
+        items = "".join(f"<li>{_esc(e)}</li>" for e in events)
+        ledger = ('<div class="ledger"><span class="ledger-head">On your behalf</span>'
+                  f'<ol class="ledger-list">{items}</ol></div>')
     return (
-        '<div class="colophon"><div class="mark">Advocate<span class="dot">.</span></div>'
+        f'{ledger}<div class="colophon"><div class="mark">Advocate<span class="dot">.</span></div>'
         '<div>A guided sprint, based on Steve Dalton’s method · You stay in the driver’s seat</div></div>'
     )
 
 
-def _nav_updates(target: int) -> list:
-    """Panel visibilities + rail-button state + step + the masthead (full on Connect, docked after)."""
+def _nav_updates(target: int, worklog: dict | None = None) -> list:
+    """Panel visibilities + rail-button state + step + the masthead (full on Connect, docked after).
+
+    The docked masthead carries the worklog (remembered brief + chronicle count) so the standing agent
+    never forgets the aim as the user moves between steps.
+    """
     group_updates = [gr.update(visible=v) for v in visibility_for(target)]
     button_updates = []
     for i in range(NUM_STEPS):
@@ -298,8 +347,20 @@ def _nav_updates(target: int) -> list:
             button_updates.append(gr.update(variant="secondary", elem_classes=["rail-btn", "step-done"]))
         else:
             button_updates.append(gr.update(variant="secondary", elem_classes=["rail-btn"]))
-    mast = gr.update(value=_masthead_html() if target == 0 else _dock_html())
+    mast = gr.update(value=_masthead_html() if target == 0 else _dock_from(worklog))
     return group_updates + button_updates + [target, mast]
+
+
+def _advance_if_sourced(records: list, worklog: dict | None = None) -> list:
+    """Auto-advance Source→Rate, but ONLY once employers actually landed; else hold on Source so the
+    error/fallback note stays visible. Never advances past a locked gate (rating happens on Rate)."""
+    return _nav_updates(2 if records else 1, worklog)
+
+
+def _advance_if_approved(meta: dict, worklog: dict | None = None) -> list:
+    """Auto-advance Approve→3B7, but ONLY once a real outreach was countersigned (meta is set at draft
+    time and present only for a produced draft); else hold on Outreach."""
+    return _nav_updates(5 if meta else 4, worklog)
 
 
 def _ranked_motivations(ranked: list) -> dict:
@@ -333,29 +394,39 @@ def _iap_blocked(request) -> bool:
 
 # ----- step handlers (thin wrappers over the tested pipeline) -----
 
-def _on_source(industry, geography, function, request: gr.Request = None):
-    """Grounded sourcing with streamed status; renders the custom roster + resets ratings."""
+def _on_source(industry, geography, function, request: gr.Request = None, worklog=None):
+    """Grounded sourcing with streamed status; renders the custom roster + resets ratings.
+
+    Also drives the worklog (5th–7th outputs): sets the remembered brief from the inputs and, on
+    success, appends a real "Sourced N employers" event to the chronicle (count → dock chip,
+    list → colophon ledger). A `.then` chain auto-advances to Rate once employers land.
+    """
+    wl = worklog or {}
+    colophon = _colophon_html(wl.get("chronicle"))  # unchanged on error/searching paths
     if _iap_blocked(request):
         yield ("Not authenticated — reach this service through Google sign-in (IAP).",
-               gr.update(), [], "{}", _dock_html())
+               gr.update(), [], "{}", _dock_from(wl), wl, colophon)
         return
     industry = (industry or "").strip()
     function = (function or "").strip()
     if not industry or not function:
         yield ("Enter at least a target **industry / sector** and **function** on the Connect step first.",
-               gr.update(), [], "{}", _dock_html())
+               gr.update(), [], "{}", _dock_from(wl), wl, colophon)
         return
+    searching_wl = _update_worklog(wl, brief=_brief_line(industry, function, geography))
     yield ("Searching the web for target employers across the four LAMP lenses… "
            "this runs grounded Gemini and can take about a minute.", gr.update(), [], "{}",
-           _dock_html(working=True, status="Reading the web for the forty worth your time…"))
+           _dock_from(searching_wl, working=True, status="Reading the web for the forty worth your time…"),
+           searching_wl, colophon)
     result = pipeline.source_targets(industry, geography or "", function)
     orgs = result["organizations"]
     note = ("Live search was unavailable, so these are the **seeded** target companies "
             "(the flow still works end-to-end)." if result.get("fallback") else
             f"Sourced **{result['count']}** employers"
             + ("" if result.get("met_minimum") else " (below the 40 target, but all grounded)") + ".")
-    yield (note + "  \nNow go to **Rate** and gut-rate each 1–5.",
-           gr.update(value=_rate_html(orgs)), orgs, "{}", _dock_html(working=False))
+    done_wl = _update_worklog(searching_wl, event=f"Sourced {len(orgs)} target employers.")
+    yield (note, gr.update(value=_rate_html(orgs)), orgs, "{}", _dock_from(done_wl),
+           done_wl, _colophon_html(done_wl["chronicle"]))
 
 
 def _on_rank(ratings_json, records):
@@ -391,7 +462,7 @@ def _on_rank(ratings_json, records):
     )
 
 
-def _on_draft(company, background, ranked, request: gr.Request = None):
+def _on_draft(company, background, ranked, request: gr.Request = None, worklog=None):
     """Find a starter contact for the chosen company, then draft a compliant outreach email.
 
     Re-checks the rate-10 gate from the in-session ranked state so drafting isn't reachable via
@@ -401,47 +472,56 @@ def _on_draft(company, background, ranked, request: gr.Request = None):
     unauthenticated if IAP is ever misconfigured.
 
     Streams a WORKING dock (4th output) around the grounded draft call — the seal sweeps while the
-    note is composed, then settles. Error/guard branches yield a resting dock so the seal never
-    hangs spinning.
+    note is composed, then settles. The dock carries the worklog (remembered brief + chronicle count)
+    so the standing agent doesn't forget the aim mid-draft. A draft is transient (it may be
+    regenerated/discarded), so it is NOT logged to the chronicle — only the countersign is (see
+    _on_approve). Error/guard branches yield a resting dock so the seal never hangs spinning.
     """
     if _iap_blocked(request):
         yield (_draft_note("Not authenticated — reach this service through Google sign-in (IAP)."),
-               gr.update(value=""), {}, _dock_html())
+               gr.update(value=""), {}, _dock_from(worklog))
         return
     if not pipeline.gate_status(ranked or [], _ranked_motivations(ranked))["unlocked"]:
         rated = sum(1 for o in (ranked or []) if o.get("motivation") is not None)
         yield (_draft_note(f"Outreach is locked — rate at least {pipeline.OUTREACH_RATING_THRESHOLD} "
                            f"companies on the Rate step first (you’ve rated {rated})."),
-               gr.update(value=""), {}, _dock_html())
+               gr.update(value=""), {}, _dock_from(worklog))
         return
     if not company:
-        yield (_draft_note("Pick a company on the Rank step first."), gr.update(value=""), {}, _dock_html())
+        yield (_draft_note("Pick a company on the Rank step first."), gr.update(value=""), {},
+               _dock_from(worklog))
         return
     contact = pipeline.starter_contact(company)
     if not contact.get("found"):
         yield (_draft_note(f"No connected contact found at {company} — pick another company or add a "
                            "contact to your alumni CSV. Advocate never invents a contact."),
-               gr.update(value=""), {}, _dock_html())
+               gr.update(value=""), {}, _dock_from(worklog))
         return
     # Grounded, cost-bearing: show the seal at work while the note is composed.
     yield (_draft_note(f"Composing a compliant note to {contact['contact_name']} at {company}…"),
            gr.update(value=""), {},
-           _dock_html(working=True, status=f"Composing your note to {contact['contact_name']}…"))
+           _dock_from(worklog, working=True, status=f"Composing your note to {contact['contact_name']}…"))
     result = pipeline.draft_email(contact["contact_name"], company, background or "a job seeker", contact["connection"])
     if not result.get("passed"):
         yield (_draft_note(f"Couldn’t produce a compliant draft for {contact['contact_name']} at {company}: "
                            f"{result.get('error', 'unknown error')}. Try Regenerate."),
-               gr.update(value=""), {}, _dock_html())
+               gr.update(value=""), {}, _dock_from(worklog))
         return
     meta = {"company": company, "contact": contact["contact_name"]}
     head = _draft_head_html(contact["contact_name"], contact.get("title", ""), company, result.get("word_count"))
-    yield (head, gr.update(value=result["email"]), meta, _dock_html())
+    yield (head, gr.update(value=result["email"]), meta, _dock_from(worklog))
 
 
-def _on_approve(draft_text, meta):
-    """Approve = the user sends it themselves; we only schedule the 3B7 reminders."""
+def _on_approve(draft_text, meta, worklog=None):
+    """Approve = the user sends it themselves; we only schedule the 3B7 reminders.
+
+    The countersign is the one real outreach event, so it is logged to the chronicle (3rd/4th
+    outputs: worklog + colophon ledger). A `.then` chain auto-advances to the 3B7 step.
+    """
+    wl = worklog or {}
     if not (draft_text or "").strip() or not meta:
-        return ("Nothing to approve yet — draft an email first.", _CADENCE_PLACEHOLDER)
+        return ("Nothing to approve yet — draft an email first.", _CADENCE_PLACEHOLDER,
+                wl, _colophon_html(wl.get("chronicle")))
     plan = pipeline.schedule_3b7(date.today().isoformat())
     company, contact = meta.get("company", ""), meta.get("contact", "")
     msg = (f"Countersigned. **You** sent your note to **{contact}** at **{company}** — I only logged "
@@ -452,7 +532,8 @@ def _on_approve(draft_text, meta):
                   f"- Follow-up #1 (advance to next contact if no reply): **{plan['followup_3b']}**\n"
                   f"- Follow-up #2 (gentle nudge to contact #1): **{plan['followup_7b']}**\n\n"
                   f"Use **Prep** to get TIARA questions once someone replies.")
-    return (msg, cadence_md)
+    done_wl = _update_worklog(wl, event=f"Logged your note to {contact} at {company}; follow-ups scheduled.")
+    return (msg, cadence_md, done_wl, _colophon_html(done_wl["chronicle"]))
 
 
 def _on_discard():
@@ -460,20 +541,26 @@ def _on_discard():
     return (_DRAFT_HEAD_PLACEHOLDER, "", {}, "", _CADENCE_PLACEHOLDER)
 
 
-def _on_prep(company, role, request: gr.Request = None):
+def _on_prep(company, role, request: gr.Request = None, worklog=None):
     """Cited research brief + five TIARA questions for an informational interview.
 
     Streams a WORKING dock (2nd output) around the grounded research call — the seal sweeps while
-    the brief is gathered, then settles. Guard branches yield a resting dock.
+    the brief is gathered, then settles. On success it logs a real "Prepared an interview brief"
+    event to the chronicle (3rd/4th outputs: worklog + colophon ledger). Guard branches yield a
+    resting dock and leave the chronicle untouched.
     """
+    wl = worklog or {}
+    colophon = _colophon_html(wl.get("chronicle"))  # unchanged on guard/working paths
     if _iap_blocked(request):
-        yield ("Not authenticated — reach this service through Google sign-in (IAP).", _dock_html())
+        yield ("Not authenticated — reach this service through Google sign-in (IAP).",
+               _dock_from(wl), wl, colophon)
         return
     if not company:
-        yield ("Pick a ranked company above, or type a company name, then prepare.", _dock_html())
+        yield ("Pick a ranked company above, or type a company name, then prepare.",
+               _dock_from(wl), wl, colophon)
         return
     yield ("Researching the company (grounded Gemini)… up to about a minute.",
-           _dock_html(working=True, status=f"Researching {company} for your interview…"))
+           _dock_from(wl, working=True, status=f"Researching {company} for your interview…"), wl, colophon)
     result = pipeline.prep(company, (role or "this role").strip())
     q = result.get("questions", {})
     caveat = ""
@@ -483,9 +570,11 @@ def _on_prep(company, role, request: gr.Request = None):
         caveat = "\n\n> Based on limited sources — verify specifics before relying on them."
     questions_md = "\n".join(f"- **{cat}:** {q.get(cat, '')}"
                              for cat in ["Trends", "Insights", "Advice", "Resources", "Assignments"])
+    done_wl = _update_worklog(wl, event=f"Prepared an interview brief for {company}.")
     # _md_escape the user-typed company so it can't inject Markdown/links into the heading.
     yield (f"### {_md_escape(company)} — informational brief\n\n{result.get('brief','')}"
-           f"\n\n### TIARA questions\n{questions_md}{caveat}", _dock_html())
+           f"\n\n### TIARA questions\n{questions_md}{caveat}", _dock_from(done_wl),
+           done_wl, _colophon_html(done_wl["chronicle"]))
 
 
 def build_app() -> gr.Blocks:
@@ -496,6 +585,7 @@ def build_app() -> gr.Blocks:
         records_state = gr.State([])   # sourced full org records
         ranked_state = gr.State([])    # ranked Active-Five (carries motivation); read by _on_draft
         meta_state = gr.State({})      # {company, contact} for the approved outreach
+        worklog_state = gr.State({"brief": "", "chronicle": []})  # the standing agent's memory (Phase C)
 
         masthead = gr.HTML(_masthead_html(), elem_id="adv-masthead")
 
@@ -614,7 +704,7 @@ def build_app() -> gr.Blocks:
             prep_view = gr.Markdown(_PREP_PLACEHOLDER, elem_classes=["adv-status"])
         groups.append(g6)
 
-        gr.HTML(_colophon_html(), elem_id="adv-colophon")
+        colophon = gr.HTML(_colophon_html(), elem_id="adv-colophon")
 
         # ----- wiring (handlers are module-level for testability) -----
         alumni_csv.upload(_on_connect, inputs=[alumni_csv], outputs=[connect_status])
@@ -622,21 +712,31 @@ def build_app() -> gr.Blocks:
         nav_outputs = groups + rail_buttons + [step, masthead]
         for i, button in enumerate(rail_buttons):
             # show_progress="hidden": nav is instant; don't flash Gradio's grey overlay/timer on the dock.
-            button.click(fn=functools.partial(_nav_updates, i), outputs=nav_outputs, show_progress="hidden")
+            # worklog_state in → the docked masthead keeps the remembered brief + chronicle count on every step.
+            button.click(fn=functools.partial(_nav_updates, i), inputs=[worklog_state],
+                         outputs=nav_outputs, show_progress="hidden")
 
-        source_btn.click(_on_source, inputs=[industry_in, geography_in, function_in],
-                         outputs=[source_status, rate_roster, records_state, ratings_json, masthead],
-                         show_progress="hidden")
+        # Source: streams roster + worklog (brief/chronicle), then auto-advances to Rate iff employers landed.
+        source_btn.click(_on_source, inputs=[industry_in, geography_in, function_in, worklog_state],
+                         outputs=[source_status, rate_roster, records_state, ratings_json, masthead,
+                                  worklog_state, colophon],
+                         show_progress="hidden").then(
+            _advance_if_sourced, inputs=[records_state, worklog_state], outputs=nav_outputs,
+            show_progress="hidden")
         rank_btn.click(_on_rank, inputs=[ratings_json, records_state],
                        outputs=[gate_status, ranked_state, ranked_view, outreach_company, prep_company, draft_btn])
-        draft_btn.click(_on_draft, inputs=[outreach_company, background_in, ranked_state],
+        draft_btn.click(_on_draft, inputs=[outreach_company, background_in, ranked_state, worklog_state],
                         outputs=[draft_status, draft_box, meta_state, masthead], show_progress="hidden")
-        regen_btn.click(_on_draft, inputs=[outreach_company, background_in, ranked_state],
+        regen_btn.click(_on_draft, inputs=[outreach_company, background_in, ranked_state, worklog_state],
                         outputs=[draft_status, draft_box, meta_state, masthead], show_progress="hidden")
-        approve_btn.click(_on_approve, inputs=[draft_box, meta_state], outputs=[approve_status, cadence_view])
+        # Approve: logs the countersign to the chronicle, then auto-advances to the 3B7 step.
+        approve_btn.click(_on_approve, inputs=[draft_box, meta_state, worklog_state],
+                          outputs=[approve_status, cadence_view, worklog_state, colophon]).then(
+            _advance_if_approved, inputs=[meta_state, worklog_state], outputs=nav_outputs,
+            show_progress="hidden")
         discard_btn.click(_on_discard, outputs=[draft_status, draft_box, meta_state, approve_status, cadence_view])
-        prep_btn.click(_on_prep, inputs=[prep_company, prep_role], outputs=[prep_view, masthead],
-                       show_progress="hidden")
+        prep_btn.click(_on_prep, inputs=[prep_company, prep_role, worklog_state],
+                       outputs=[prep_view, masthead, worklog_state, colophon], show_progress="hidden")
 
     return demo
 

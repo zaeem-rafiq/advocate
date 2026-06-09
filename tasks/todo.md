@@ -22,13 +22,32 @@ generators (can yield seal states); `_on_draft` is blocking (convert to generato
 - [x] Rate-10 gate hero beat: locked CTA → armed "Draft my note to {top} →" on the 10th rating (`_on_rank`)
 - [x] Approval as a visible draft-only countersign (`_on_approve`)
 
-## Phase C — chronicle + memory + auto-advance
-- [ ] `chronicle` gr.State appended by handlers (real events only); render in dock tray + colophon
-- [ ] Remembered-brief: agent speaks targets back ("Watching for {function} in {industry}, around {geography}.")
-- [ ] Auto-advance on satisfied gates only (Source→Rate, Approve→3B7); never past a locked gate
+## Phase C — chronicle + memory + auto-advance ✅ complete
+- [x] `chronicle` in a single `worklog_state` dict, appended by handlers on REAL events only (Sourced/Countersigned/Prepared — never transient drafts); count → dock chip, list → colophon "On your behalf" ledger
+- [x] Remembered-brief: `_brief_line` speaks the aim back ("Watching for {function} in {industry}, around {geography}."), set at Source, carried in the dock on every step via `_nav_updates(target, worklog)`
+- [x] Auto-advance on satisfied gates only — Source→Rate (`.then(_advance_if_sourced)`, iff employers landed), Approve→3B7 (`.then(_advance_if_approved)`, iff countersigned); never past a locked gate
+- [x] **Fixed a pre-existing no-scroll bug surfaced by the ledger:** Rate's roster reserved `calc(100vh - 358px)` but the non-roster column is ~720px, so Rate overflowed ~310px at every height (Phase A's claim didn't hold). Recalibrated to `calc(100vh - 720px)`; measured `overflowBy: 0` at 1204px, roster scrolls internally. Ledger capped (`max-height` + `_CHRONICLE_CAP=12`) so growth never re-overflows.
 
 ## Phase D — command line (highest risk, ship last)
 - [ ] Deterministic NL→param intent router; confirm-before-fire on any grounded re-run
+
+### Review — Phase C: the worklog (2026-06-09)
+- **What changed:** A single immutable `worklog_state` ({brief, chronicle}) threaded through every dock-rendering
+  handler. The standing agent now (a) speaks the remembered aim back in the dock, (b) keeps a real-events
+  chronicle (dock chip count + colophon "On your behalf" ledger), and (c) auto-advances Source→Rate and
+  Approve→3B7 on satisfied gates only (Gradio `.then` chains; the streaming generators kept their shape).
+  `worklog` placed AFTER the `gr.Request` param so every existing positional handler call still binds.
+- **Verification:** 325 passed / 1 skipped (8 new Phase C tests: brief line, immutable/capped worklog, dock
+  rendering, ledger present/absent, nav docking, auto-advance targets, source/prep event logging). `build_app()`
+  constructs the full graph incl. the new `.then` chains + worklog/colophon outputs. **Live (plugin-playwright,
+  seed mode, 1204px):** filled Connect → Source → seal worked → auto-advanced to Rate; dock showed the brief +
+  "1 ON YOUR BEHALF"; colophon ledger showed "Sourced 24 target employers."; `overflowBy: 0` (no page scroll),
+  roster scrolls internally. `/design-review`: PASS (15/15 rejection checklist).
+- **Issues found + fixed:** the ledger surfaced a **pre-existing** Rate overflow (~310px at all heights — Phase A's
+  `calc(100vh - 358px)` under-reserved by ~373px). Root-caused via live measurement and fixed to `- 720px` +
+  capped the ledger so growth can't re-overflow. (The shared default-Playwright browser was unusable — concurrent
+  worktrees churned its tabs — so I drove the separate plugin-Playwright instance instead.)
+- **Next:** Phase D — the NL command line (deterministic intent router, confirm-before-fire on grounded re-runs).
 
 ### Review — Phase B close-out (2026-06-09)
 - **What changed:** `_on_draft`→generator (4th output `masthead`) and `_on_prep`→2-tuple yields, so the dock

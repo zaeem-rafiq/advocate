@@ -285,7 +285,10 @@ footer { display: none !important; }
 .roster { padding: 0; }
 /* the ~40-row Rate roster scrolls INTERNALLY so the page itself never scrolls (no-scroll shell);
    the progress masthead + dock stay pinned above it. Rank's 5-row list is short, so it's unscoped. */
-#adv-rate .roster { max-height: calc(100vh - 358px); overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--rule-strong) transparent; padding-right: 6px; -webkit-overflow-scrolling: touch; }
+/* Reserve enough for the full non-roster column (masthead + rail + sec-head + progress + rank CTA +
+   the colophon/ledger) so the page itself never scrolls — only the roster does, internally. Measured:
+   the non-roster content is ~720px, so calc(100vh - 358px) under-reserved and Rate overflowed. */
+#adv-rate .roster { max-height: calc(100vh - 720px); min-height: 200px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--rule-strong) transparent; padding-right: 6px; -webkit-overflow-scrolling: touch; }
 #adv-rate .roster::-webkit-scrollbar { width: 7px; }
 #adv-rate .roster::-webkit-scrollbar-thumb { background: var(--rule-strong); border-radius: 4px; }
 .row { display: grid; grid-template-columns: 36px 1fr auto; align-items: center; gap: 22px; padding: 22px 4px; border-bottom: 1px solid var(--rule); transition: background .18s; }
@@ -380,10 +383,21 @@ footer { display: none !important; }
 .adv-status p, .adv-status { font-family: var(--read) !important; color: var(--ink-soft) !important; font-size: 15px !important; }
 .adv-status b, .adv-status strong { color: var(--ink) !important; font-family: var(--sans) !important; }
 
-/* ---------- COLOPHON ---------- */
+/* ---------- COLOPHON + the "on your behalf" ledger ---------- */
 #adv-colophon .colophon { margin-top: 22px; padding-top: 14px; border-top: 1.5px solid var(--ink); display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; color: var(--ink-faint); letter-spacing: .02em; }
 .colophon .mark { font-family: var(--serif); font-weight: 500; color: var(--ink-soft); }
 .colophon .mark .dot { color: var(--accent); }
+/* The chronicle: a printed ledger of the real actions the agent took. Sits above the colophon row;
+   when present it owns the top rule, so the colophon's own rule is dropped to avoid a double line.
+   Height-capped (scrolls internally past a few events) so it never pushes a step past the viewport. */
+.ledger { margin-top: 14px; padding-top: 11px; border-top: 1.5px solid var(--ink); }
+.ledger-head { display: block; font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 6px; }
+.ledger-list { margin: 0; padding-left: 1.2em; list-style: decimal; max-height: 46px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--rule-strong) transparent; }
+.ledger-list li { font-family: var(--read); font-size: 13px; line-height: 1.5; color: var(--ink-soft); padding-left: 3px; }
+.ledger-list li::marker { font-family: var(--serif); font-feature-settings: "tnum" 1; color: var(--ink-faint); }
+.ledger + .colophon { border-top: none; margin-top: 12px; padding-top: 0; }
+@media (prefers-reduced-motion: no-preference) { .ledger-list li { animation: ledger-in .35s ease both; } }
+@keyframes ledger-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
 
 /* ---------- a11y + responsive ---------- */
 *:focus-visible { outline: 2.5px solid var(--accent) !important; outline-offset: 2px !important; border-radius: 3px; }

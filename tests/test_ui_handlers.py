@@ -149,17 +149,21 @@ def test_on_draft_success_sets_meta(monkeypatch):
 # ----- _on_approve: guard + 3B7 (draft-only) -----
 
 def test_on_approve_guards_empty_draft():
-    msg, cadence = app._on_approve("", {})
+    msg, cadence, worklog, _colophon = app._on_approve("", {})
     assert "Nothing to approve" in msg and cadence == app._CADENCE_PLACEHOLDER
+    assert not (worklog.get("chronicle"))  # a no-op guard never logs a phantom event
 
 
 def test_on_approve_schedules_3b7_and_states_draft_only(monkeypatch):
     monkeypatch.setattr(pipeline, "schedule_3b7",
                         lambda iso: {"followup_3b": "2026-06-11", "followup_7b": "2026-06-17"})
-    msg, cadence = app._on_approve("Hi Maya, ...", {"company": "Acme", "contact": "Maya"})
+    msg, cadence, worklog, colophon = app._on_approve("Hi Maya, ...", {"company": "Acme", "contact": "Maya"})
     assert "Acme" in msg and "Maya" in msg
     assert "2026-06-11" in msg and "2026-06-17" in cadence
     assert "draft-only" in msg.lower()  # the no-send guarantee is stated to the user
+    # the countersign is the one real outreach event — logged to the chronicle + the colophon ledger
+    assert any("Maya" in e and "Acme" in e for e in worklog["chronicle"])
+    assert "On your behalf" in colophon and "Maya" in colophon
 
 
 # ----- _on_source: validation + streaming -----
@@ -288,3 +292,87 @@ def test_on_connect_error_leaks_no_path_or_trace(monkeypatch):
         assert path not in msg and "KeyError" not in msg  # no internal path / exception surfaced
     finally:
         os.remove(path)
+
+
+# ===== Phase C: the worklog — remembered brief, chronicle ledger, auto-advance =====
+
+def test_brief_line_speaks_the_aim_back():
+    assert app._brief_line("climate", "product management", "New York") == \
+        "Watching for product management in climate, around New York."
+    # geography optional — no dangling "around"
+    assert app._brief_line("climate", "PM", "") == "Watching for PM in climate."
+    # nothing to remember yet → empty (dock stays bare, never "Watching for roles in .")
+    assert app._brief_line("", "", "") == ""
+
+
+def test_update_worklog_is_immutable_and_capped():
+    base = {"brief": "b", "chronicle": ["one"]}
+    out = app._update_worklog(base, event="two")
+    assert out["chronicle"] == ["one", "two"] and out["brief"] == "b"
+    assert base["chronicle"] == ["one"]  # original untouched (immutability)
+    # brief set without an event preserves the chronicle; only-event preserves the brief
+    assert app._update_worklog(base, brief="z")["chronicle"] == ["one"]
+    # bounded to the last _CHRONICLE_CAP events
+    big = {"brief": "", "chronicle": [str(i) for i in range(app._CHRONICLE_CAP + 5)]}
+    capped = app._update_worklog(big, event="newest")
+    assert len(capped["chronicle"]) == app._CHRONICLE_CAP and capped["chronicle"][-1] == "newest"
+
+
+def test_dock_from_carries_brief_and_count():
+    wl = {"brief": "Watching for PM in climate.", "chronicle": ["a", "b"]}
+    dock = app._dock_from(wl)
+    assert "Watching for PM in climate." in dock and "2 on your behalf" in dock
+    # empty worklog → bare dock (no brief span, no chronicle chip)
+    bare = app._dock_from({})
+    assert "dock-brief" not in bare and "on your behalf" not in bare
+
+
+def test_colophon_ledger_renders_only_real_events():
+    assert "On your behalf" not in app._colophon_html([])           # nothing yet → no ledger
+    led = app._colophon_html(["Sourced 40 target employers."])
+    assert "On your behalf" in led and "Sourced 40 target employers." in led
+
+
+def test_nav_updates_docks_the_brief_after_connect_but_not_on_the_cover():
+    wl = {"brief": "Watching for PM in climate.", "chronicle": ["x"]}
+    # Connect (step 0) is the full cover plate — the dock brief does NOT show there
+    cover_mast = app._nav_updates(0, wl)[-1]["value"]
+    assert "Watching for PM" not in cover_mast
+    # any step past the cover docks the remembered brief + count
+    rate_mast = app._nav_updates(2, wl)[-1]["value"]
+    assert "Watching for PM in climate." in rate_mast and "1 on your behalf" in rate_mast
+
+
+def test_auto_advance_only_through_satisfied_gates():
+    wl = {"brief": "", "chronicle": []}
+    # Source→Rate only once employers landed; otherwise hold on Source (step 1)
+    assert app._advance_if_sourced([_rec("Acme")], wl)[-2] == 2
+    assert app._advance_if_sourced([], wl)[-2] == 1
+    # Approve→3B7 only once a real outreach was countersigned (meta present); else hold on Outreach (4)
+    assert app._advance_if_approved({"company": "Acme", "contact": "Maya"}, wl)[-2] == 5
+    assert app._advance_if_approved({}, wl)[-2] == 4
+
+
+def test_on_source_remembers_brief_and_logs_the_chronicle(monkeypatch):
+    monkeypatch.delenv("REQUIRE_IAP", raising=False)
+    monkeypatch.setattr(pipeline, "source_targets",
+                        lambda i, g, f: {"organizations": [_rec("Acme"), _rec("Beta")], "count": 2,
+                                         "grounded": True, "met_minimum": False, "fallback": False})
+    out = list(app._on_source("climate", "New York", "product management", worklog={"brief": "", "chronicle": []}))
+    final_worklog, final_colophon = out[-1][5], out[-1][6]
+    assert final_worklog["brief"] == "Watching for product management in climate, around New York."
+    assert final_worklog["chronicle"] == ["Sourced 2 target employers."]  # real count, real event
+    assert "On your behalf" in final_colophon and "Sourced 2 target employers." in final_colophon
+    # the brief is remembered from the first (searching) frame, before results land
+    assert "Watching for product management" in out[0][5]["brief"]
+
+
+def test_on_prep_logs_a_real_interview_event(monkeypatch):
+    monkeypatch.delenv("REQUIRE_IAP", raising=False)
+    monkeypatch.setattr(pipeline, "prep",
+                        lambda c, r: {"brief": "ok", "questions": {}, "grounded": True, "depth": "deep"})
+    out = list(app._on_prep("Acme", "PM", worklog={"brief": "b", "chronicle": []}))
+    final_worklog, final_colophon = out[-1][2], out[-1][3]
+    assert final_worklog["chronicle"] == ["Prepared an interview brief for Acme."]
+    assert final_worklog["brief"] == "b"  # prep preserves the remembered brief
+    assert "Prepared an interview brief for Acme." in final_colophon
