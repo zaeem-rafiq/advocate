@@ -37,6 +37,25 @@ def test_rate_html_omits_receipt_in_seed_mode():
     assert 'class="receipt"' not in app._rate_html([seed])
 
 
+def test_dock_working_state_sweeps_and_narrates():
+    """The dock's working state marks the seal + narrates; resting carries neither."""
+    working = app._dock_html(working=True, status="Reading the web for the forty…")
+    assert 'data-state="working"' in working and "Reading the web" in working
+    resting = app._dock_html()
+    assert 'data-state="working"' not in resting and "dock-status" not in resting
+
+
+def test_on_source_drives_the_working_seal(monkeypatch):
+    """Source yields a WORKING dock while the grounded call runs, then a resting one (5th output)."""
+    monkeypatch.delenv("REQUIRE_IAP", raising=False)
+    monkeypatch.setattr(pipeline, "source_targets",
+                        lambda i, g, f: {"organizations": [_rec("Acme")], "count": 1,
+                                         "grounded": True, "met_minimum": False, "fallback": False})
+    out = list(app._on_source("climate", "NYC", "PM"))
+    assert 'data-state="working"' in out[0][4]      # seal sweeps during the call
+    assert 'data-state="working"' not in out[-1][4]  # settles when the roster lands
+
+
 # ----- _on_rank: rate-10 gate -----
 
 def test_on_rank_locked_below_threshold():

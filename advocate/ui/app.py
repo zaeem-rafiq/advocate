@@ -126,21 +126,28 @@ def _masthead_html() -> str:
     )
 
 
-def _dock_html(brief: str = "", chronicle_count: int = 0) -> str:
-    """The cover plate, docked: a slim persistent "standing agent" header for steps 1–6.
+def _dock_html(brief: str = "", chronicle_count: int = 0, working: bool = False, status: str = "") -> str:
+    """The cover plate, docked: the slim persistent "standing agent" header for steps 1–6.
 
-    Reclaims the vertical the full cover plate eats (≈276px) so each step fits the viewport, and
-    is the vessel for the agent's presence — the remembered-brief and chronicle slots fill in later
-    phases (blank here). Rendered by `_nav_updates` when the target step is not Connect.
+    Reclaims the vertical the full cover plate eats (≈276px) so each step fits the viewport, and is
+    the vessel for the agent's presence. `working` + `status` drive the visible "at work" state
+    during a grounded call — the seal sweeps and the dock narrates what it's doing, then settles
+    back. brief/chronicle are Phase-C slots (blank here). Rendered when the target step is not Connect.
     """
-    brief_html = f'<span class="dock-brief">{_esc(brief)}</span>' if brief else ""
+    state = ' data-state="working"' if working else ""
+    if working and status:
+        mid = f'<span class="dock-status">{_esc(status)}</span>'
+    elif brief:
+        mid = f'<span class="dock-brief">{_esc(brief)}</span>'
+    else:
+        mid = ""
     chron_html = (f'<span class="dock-chron">{int(chronicle_count)} on your behalf</span>'
                   if chronicle_count else "")
     return (
         '<header class="masthead mast-compact"><div class="dock">'
-        f'<div class="dock-seal">{_seal_svg()}</div>'
+        f'<div class="dock-seal"{state}>{_seal_svg()}</div>'
         '<div class="dock-id"><span class="dock-name">Advocate<span class="dot">.</span></span>'
-        f'{brief_html}</div>{chron_html}</div></header>'
+        f'{mid}</div>{chron_html}</div></header>'
     )
 
 
@@ -329,16 +336,18 @@ def _iap_blocked(request) -> bool:
 def _on_source(industry, geography, function, request: gr.Request = None):
     """Grounded sourcing with streamed status; renders the custom roster + resets ratings."""
     if _iap_blocked(request):
-        yield ("Not authenticated — reach this service through Google sign-in (IAP).", gr.update(), [], "{}")
+        yield ("Not authenticated — reach this service through Google sign-in (IAP).",
+               gr.update(), [], "{}", _dock_html())
         return
     industry = (industry or "").strip()
     function = (function or "").strip()
     if not industry or not function:
         yield ("Enter at least a target **industry / sector** and **function** on the Connect step first.",
-               gr.update(), [], "{}")
+               gr.update(), [], "{}", _dock_html())
         return
     yield ("Searching the web for target employers across the four LAMP lenses… "
-           "this runs grounded Gemini and can take about a minute.", gr.update(), [], "{}")
+           "this runs grounded Gemini and can take about a minute.", gr.update(), [], "{}",
+           _dock_html(working=True, status="Reading the web for the forty worth your time…"))
     result = pipeline.source_targets(industry, geography or "", function)
     orgs = result["organizations"]
     note = ("Live search was unavailable, so these are the **seeded** target companies "
@@ -346,7 +355,7 @@ def _on_source(industry, geography, function, request: gr.Request = None):
             f"Sourced **{result['count']}** employers"
             + ("" if result.get("met_minimum") else " (below the 40 target, but all grounded)") + ".")
     yield (note + "  \nNow go to **Rate** and gut-rate each 1–5.",
-           gr.update(value=_rate_html(orgs)), orgs, "{}")
+           gr.update(value=_rate_html(orgs)), orgs, "{}", _dock_html(working=False))
 
 
 def _on_rank(ratings_json, records):
@@ -416,10 +425,10 @@ def _on_approve(draft_text, meta):
         return ("Nothing to approve yet — draft an email first.", _CADENCE_PLACEHOLDER)
     plan = pipeline.schedule_3b7(date.today().isoformat())
     company, contact = meta.get("company", ""), meta.get("contact", "")
-    msg = (f"Logged your outreach to **{contact}** at **{company}**. "
-           f"3B7 reminders scheduled: follow-up #1 **{plan['followup_3b']}** (3 business days), "
-           f"follow-up #2 **{plan['followup_7b']}** (7 business days). "
-           f"_Nothing was sent automatically — Advocate is draft-only._")
+    msg = (f"Countersigned. **You** sent your note to **{contact}** at **{company}** — I only logged "
+           f"it and scheduled the follow-ups; I never send anything for you (Advocate is **draft-only**). "
+           f"Reminders: follow-up #1 **{plan['followup_3b']}** (3 business days), "
+           f"follow-up #2 **{plan['followup_7b']}** (7 business days).")
     cadence_md = (f"**Active thread:** {contact} at {company}\n\n"
                   f"- Follow-up #1 (advance to next contact if no reply): **{plan['followup_3b']}**\n"
                   f"- Follow-up #2 (gentle nudge to contact #1): **{plan['followup_7b']}**\n\n"
@@ -592,7 +601,8 @@ def build_app() -> gr.Blocks:
             button.click(fn=functools.partial(_nav_updates, i), outputs=nav_outputs, show_progress="hidden")
 
         source_btn.click(_on_source, inputs=[industry_in, geography_in, function_in],
-                         outputs=[source_status, rate_roster, records_state, ratings_json])
+                         outputs=[source_status, rate_roster, records_state, ratings_json, masthead],
+                         show_progress="hidden")
         rank_btn.click(_on_rank, inputs=[ratings_json, records_state],
                        outputs=[gate_status, ranked_state, ranked_view, outreach_company, prep_company, draft_btn])
         draft_btn.click(_on_draft, inputs=[outreach_company, background_in, ranked_state],

@@ -206,6 +206,14 @@ footer { display: none !important; }
 .dock-name .dot { color: var(--accent-bright); }
 .dock-brief { font-family: var(--read); font-style: italic; font-size: 13.5px; color: rgba(247,244,238,.64); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dock-chron { margin-left: auto; flex: 0 0 auto; font-family: var(--sans); font-size: 10.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: rgba(247,244,238,.55); }
+/* the agent AT WORK: a slow oxblood arc sweeps the seal during a grounded call; the dock narrates it */
+.dock-seal { position: relative; }
+.dock-seal[data-state="working"]::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 1.6px solid transparent; border-top-color: var(--accent-bright); animation: dock-sweep .9s linear infinite; }
+@keyframes dock-sweep { to { transform: rotate(360deg); } }
+.dock-status { font-family: var(--read); font-style: italic; font-size: 13.5px; color: rgba(247,244,238,.84); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (prefers-reduced-motion: reduce) {
+  .dock-seal[data-state="working"]::after { animation: none; border: 1.6px solid var(--accent-bright); opacity: .5; }
+}
 
 /* ---------- STEP LEDGER (the 7 nav buttons, restyled) ---------- */
 #rail {
