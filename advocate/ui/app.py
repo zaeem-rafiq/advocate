@@ -111,7 +111,7 @@ def _masthead_html() -> str:
         '<header class="masthead">'
         '<div class="dateline"><span>A guided sprint</span>'
         '<span class="fleuron">&#10087;</span>'
-        '<span>After Steve Dalton’s method</span></div>'
+        '<span>Based on Steve Dalton’s method</span></div>'
         '<div class="nameplate-row">'
         '<h1 class="wordmark">Advocate<span class="dot">.</span></h1>'
         f'<div class="seal">{_seal_svg()}</div></div>'
@@ -262,7 +262,7 @@ def _draft_note(text: str) -> str:
 def _colophon_html() -> str:
     return (
         '<div class="colophon"><div class="mark">Advocate<span class="dot">.</span></div>'
-        '<div>A guided sprint, after Steve Dalton’s method · You stay in the driver’s seat</div></div>'
+        '<div>A guided sprint, based on Steve Dalton’s method · You stay in the driver’s seat</div></div>'
     )
 
 

@@ -178,7 +178,7 @@ footer { display: none !important; }
 .seal-svg { width: 96px; height: 96px; display: block; }
 .seal-disc { fill: var(--accent-bright); }
 .seal-ringline { fill: none; stroke: rgba(247,244,238,.92); stroke-width: 0.6; opacity: .85; }
-.seal-ring { fill: var(--paper); font-family: var(--sans); font-size: 6.5px; font-weight: 600; letter-spacing: 1.45px; }
+.seal-ring { fill: var(--paper); font-family: var(--sans); font-size: 6.5px; font-weight: 600; letter-spacing: 0.7px; }
 .seal-mono { fill: var(--paper); font-family: var(--serif); font-optical-sizing: auto; font-size: 40px; font-weight: 500; }
 .seal-fleuron { fill: var(--paper); font-family: var(--serif); font-size: 9px; }
 .tagline { margin: 12px 0 0; font-family: var(--read); font-size: 18px; line-height: 1.45; color: rgba(247,244,238,.82); max-width: 605px; }
@@ -253,9 +253,10 @@ footer { display: none !important; }
 .adv-field input::placeholder, .adv-field textarea::placeholder { color: var(--ink-ghost) !important; font-style: italic; }
 .adv-field input:focus, .adv-field textarea:focus { border-bottom-color: var(--accent) !important; outline: none !important; }
 #adv-upload { background: var(--paper-sunk) !important; border: none !important; border-top: 1px solid var(--rule) !important; border-radius: 0 0 10px 10px !important; min-height: 0 !important; }
-/* compact the dropzone to a slim ROW bar — the CSV is optional, it shouldn't eat 240px of the cover page */
-#adv-upload .wrap { min-height: 0 !important; padding: 9px 14px !important; flex-direction: row !important; align-items: center !important; justify-content: flex-start !important; gap: 10px !important; font-size: 13px !important; }
-#adv-upload .wrap > svg, #adv-upload .icon-wrap, #adv-upload .wrap .icon-wrap svg { width: 18px !important; height: 18px !important; }
+/* Gradio floats the gr.File label (position:absolute), so on a compacted dropzone it overlaps the
+   centered "Drop File Here / Click to Upload". Pin it to normal flow above a slim dropzone. */
+#adv-upload label.float { position: static !important; background: transparent !important; border: none !important; box-shadow: none !important; padding: 12px 16px 0 !important; font-size: 13px !important; }
+#adv-upload .wrap { min-height: 0 !important; padding: 12px 14px 16px !important; }
 #adv-upload .wrap, #adv-upload label { font-family: var(--read) !important; color: var(--ink-faint) !important; }
 
 /* ---------- RATE — the hero roster ---------- */
