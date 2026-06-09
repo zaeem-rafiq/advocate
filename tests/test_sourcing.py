@@ -280,6 +280,20 @@ def test_merge_orgs_backfills_blank_rationale_and_identity_fields():
     assert (m.domain, m.sector, m.location) == ("acme.com", "Aero", "LA")
 
 
+def test_merge_orgs_keeps_distinct_same_name_companies_with_rival_domains_apart():
+    """Two real companies sharing a name (Arcadia solar vs Arcadia.io healthcare) must NOT
+    merge — else one grafts its sector/rationale onto the other (a confidently-wrong receipt)."""
+    solar = SourcedOrg(company="Arcadia", domain="arcadia.com", sector="Community Solar")
+    health = SourcedOrg(company="Arcadia", domain="arcadia.io", sector="Healthcare",
+                        rationale="AI healthcare analytics")
+    merged = merge_orgs((solar,), (health,))
+    assert len(merged) == 2  # kept as separate rows
+    by_domain = {o.domain: o for o in merged}
+    assert by_domain["arcadia.com"].rationale == ""              # solar never inherits the healthcare "why"
+    assert by_domain["arcadia.com"].sector == "Community Solar"
+    assert by_domain["arcadia.io"].rationale == "AI healthcare analytics"
+
+
 def test_merge_orgs_keeps_existing_nonblank_rationale_first_wins():
     existing = (SourcedOrg(company="Acme", rationale="First reason"),)
     new = (SourcedOrg(company="acme", rationale="Second reason"),)

@@ -1,5 +1,65 @@
 # Changelog
 
+## 2026-06-09 — Phase D: the command line (deterministic NL router; agentic redesign complete)
+
+A persistent natural-language command line steers the sprint — the last piece of the agentic redesign.
+New module `advocate/ui/command.py` (pure, stdlib), `_on_command` router + command bar in app.py. No
+agent/pipeline behavior, draft-only guarantee, rate-10 gate, or IAP hardening changed. Files:
+`advocate/ui/{command.py,app.py,theme.py}`, `tests/{test_command.py,test_ui_handlers.py}`.
+
+- **Deterministic router — not an LLM.** Keyword/preposition slot-extraction maps a typed command to an
+  intent: navigate (`rate`, `go to source`), set-brief (`find product management in climate near NYC`),
+  `prep Patagonia`, `draft to Maya`, `help`. A bare verb navigates; a verb + object acts. Instant, free,
+  same-input→same-output.
+- **Confirm-before-fire, structurally.** The router NEVER fires a grounded (cost-bearing) call — it
+  navigates and *prefills*; the user clicks the step's own CTA to spend. So a typed command can't silently
+  run a grounded search/draft/prep, can't bypass the rate-10 gate, and can't send anything.
+- **Editorial command bar.** A persistent input under the rail with a "›" oxblood prompt and a terse status
+  line (hard-capped to 38px so a long reply can't break the no-scroll invariant). Not a chat box.
+- **No-scroll preserved.** The bar adds ~125px; the Rate roster reserve was re-tuned to `calc(100vh - 845px)`
+  — measured `overflowBy: 0` at 1204px, including the help-status case. Oxblood focus ring (WCAG 2.4.7).
+- **Tests:** 354 passed / 1 skipped (+23 parser, +6 router). `/design-review`: PASS. Live-verified end-to-end
+  (plugin-playwright, seed): command → prefill → Find → source → auto-advance to Rate.
+
+## 2026-06-09 — Phase C: the standing agent's worklog (remembered brief, chronicle, auto-advance)
+
+The "standing Advocate" now has memory and momentum. A single immutable `worklog_state` ({brief, chronicle})
+is threaded through every dock-rendering handler. No agent/pipeline behavior, draft-only guarantee, or
+IAP/upload/parse_ratings hardening changed. Files: `advocate/ui/{app.py,theme.py}`, `tests/test_ui_handlers.py`.
+
+- **Remembered brief.** At Source, the dock speaks the aim back — *"Watching for {function} in {industry},
+  around {geography}."* — and carries it on every step (`_nav_updates(target, worklog)`), ellipsized if long.
+- **Chronicle ledger.** Handlers append REAL events only (Sourced N / Countersigned / Prepared — never transient
+  drafts). The count shows as a dock chip (*"N on your behalf"*); the list renders as a letterpress
+  *"On your behalf"* ledger above the colophon. Capped (`_CHRONICLE_CAP=12` + `max-height`) so it never grows
+  the page.
+- **Auto-advance on satisfied gates only.** Source→Rate (once employers land) and Approve→3B7 (once
+  countersigned) via Gradio `.then` chains; never advances past a locked gate.
+- **Fixed a pre-existing no-scroll bug.** The ledger surfaced that the Rate roster reserved `calc(100vh - 358px)`
+  while the non-roster column is ~720px — so Rate overflowed ~310px at every viewport height (Phase A's no-scroll
+  didn't actually hold). Recalibrated to `calc(100vh - 720px)`; verified `overflowBy: 0` at 1204px with the roster
+  scrolling internally.
+- **Tests:** 325 passed / 1 skipped (+8 Phase C). `/design-review`: PASS. Live-verified (plugin-playwright, seed).
+
+## 2026-06-09 — Agentic Phase B close-out: working seal on every grounded call + the gate beat
+
+Finished the "standing Advocate" agentic layer (Phase B). The dock's wax seal now visibly *works* during
+all three grounded Gemini calls, and clearing the rate-10 gate arms a named call-to-action. No agent/pipeline
+behavior, draft-only guarantee, or IAP/upload/parse_ratings hardening changed. Files: `advocate/ui/app.py`,
+`tests/test_ui_handlers.py`.
+
+- **Working seal on Draft + Prep.** `_on_draft` (was blocking) and `_on_prep` are now generators that stream a
+  `working` dock (the seal sweeps an oxblood arc, the dock narrates *"Composing your note to {contact}…"* /
+  *"Researching {company} for your interview…"*) around the cost-bearing call, then settle. Source already had
+  this. Guard/error branches yield a resting dock so the seal never hangs. Both Draft clicks + Prep use
+  `show_progress="hidden"` so the seal is the *only* indicator (no Gradio overlay). Reduced-motion → static ring.
+- **The gate beat.** When the rate-10 gate unlocks, `_on_rank` stops showing a generic disabled "Draft outreach
+  email" and arms the CTA to **"Draft my note to {top} →"** — named for the user's #1 Active-Five pick. Locked
+  resets it to the disabled generic label. The gate enforcement itself is unchanged (still re-checked in `_on_draft`).
+- **Tests:** 317 passed / 1 skipped. New: `test_on_rank_unlocked_arms_the_cta_with_the_top_pick`,
+  `test_on_prep_drives_the_working_seal`; working-seal assertions added to the draft path; all `_on_draft`/`_on_prep`
+  call sites migrated to consume the generators (4-tuple / 2-tuple).
+
 ## 2026-06-09 — X-factor pass: dark "cover plate" masthead, wax seal, folio numerals
 
 The editorial UI read clean but flat. This pass adds tactile print-craft "x-factor" while keeping the

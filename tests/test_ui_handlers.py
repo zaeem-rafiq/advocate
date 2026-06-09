@@ -19,6 +19,53 @@ def _rec(company, posting=2, alum=False):
             "lenses": ["dream_peers"], "rationale": "why"}
 
 
+# ----- Rate roster: the agent's "why it surfaced" receipt -----
+
+def test_rate_html_shows_the_why_receipt_when_grounded():
+    """Each Rate row surfaces WHY it surfaced (rationale) + its LAMP lenses — when grounded."""
+    html = app._rate_html([_rec("Helio Grid", posting=3, alum=True)])
+    assert 'class="receipt"' in html
+    assert "dream peers" in html   # the humanized lens label (raw key is "dream_peers")
+    assert "dream_peers" not in html  # raw key never leaks to the UI
+    assert "why" in html           # the rationale text
+
+
+def test_rate_html_omits_receipt_in_seed_mode():
+    """Seed records carry no rationale/lenses — the receipt is absent (never invented)."""
+    seed = {"company": "Acme", "sector": "X", "posting_score": 1, "has_alumni": False,
+            "lenses": [], "rationale": ""}
+    assert 'class="receipt"' not in app._rate_html([seed])
+
+
+def test_dock_working_state_sweeps_and_narrates():
+    """The dock's working state marks the seal + narrates; resting carries neither."""
+    working = app._dock_html(working=True, status="Reading the web for the forty…")
+    assert 'data-state="working"' in working and "Reading the web" in working
+    resting = app._dock_html()
+    assert 'data-state="working"' not in resting and "dock-status" not in resting
+
+
+def test_on_source_drives_the_working_seal(monkeypatch):
+    """Source yields a WORKING dock while the grounded call runs, then a resting one (5th output)."""
+    monkeypatch.delenv("REQUIRE_IAP", raising=False)
+    monkeypatch.setattr(pipeline, "source_targets",
+                        lambda i, g, f: {"organizations": [_rec("Acme")], "count": 1,
+                                         "grounded": True, "met_minimum": False, "fallback": False})
+    out = list(app._on_source("climate", "NYC", "PM"))
+    assert 'data-state="working"' in out[0][4]      # seal sweeps during the call
+    assert 'data-state="working"' not in out[-1][4]  # settles when the roster lands
+
+
+def test_on_prep_drives_the_working_seal(monkeypatch):
+    """Prep sweeps the dock seal (2nd output) while researching, then settles when the brief lands."""
+    monkeypatch.delenv("REQUIRE_IAP", raising=False)
+    monkeypatch.setattr(pipeline, "prep",
+                        lambda c, r: {"brief": "ok", "questions": {}, "grounded": True, "depth": "deep"})
+    out = list(app._on_prep("Acme", "PM"))
+    assert 'data-state="working"' in out[0][1] and "Researching Acme" in out[0][1]
+    assert 'data-state="working"' not in out[-1][1]  # settles when the brief lands
+
+
 # ----- _on_rank: rate-10 gate -----
 
 def test_on_rank_locked_below_threshold():
@@ -29,15 +76,19 @@ def test_on_rank_locked_below_threshold():
     assert "7" in msg and "more to unlock" in msg.lower()  # 10 - 3 = 7 remaining
     assert len(ranked) == 12
     assert draft_btn.get("interactive") is False  # Draft button stays DISABLED while locked
+    assert draft_btn.get("value") == "Draft outreach email"  # CTA stays its generic locked label
 
 
-def test_on_rank_unlocked_at_threshold():
+def test_on_rank_unlocked_arms_the_cta_with_the_top_pick():
+    """The gate beat: at threshold the Draft CTA arms with the specific #1 company, not a generic label."""
     records = [_rec(f"C{i}") for i in range(12)]
     ratings = json.dumps({f"C{i}": 4 for i in range(10)})  # 10 rated
     msg, ranked, _html, _outreach, _prep, draft_btn = app._on_rank(ratings, records)
     assert "unlocked" in msg.lower()
     assert ranked[0]["motivation"] == 4  # a rated org sorts to the top
     assert draft_btn.get("interactive") is True  # Draft button enabled once unlocked
+    top = ranked[0]["company"]
+    assert draft_btn.get("value") == f"Draft my note to {top} →"  # armed with the named top pick
 
 
 def test_on_discard_resets_downstream_state():
@@ -55,19 +106,19 @@ _UNLOCKED = [{"company": f"C{i}", "motivation": 5} for i in range(10)]
 
 def test_on_draft_locked_until_ten_rated():
     ranked = [{"company": f"C{i}", "motivation": (5 if i < 3 else None)} for i in range(12)]  # 3 rated
-    status, _draft, meta = app._on_draft("C0", "bg", ranked)
+    status, _draft, meta, _dock = list(app._on_draft("C0", "bg", ranked))[-1]
     assert "locked" in status.lower() and "rate at least 10" in status.lower()
     assert meta == {}  # no draft produced while locked — the gate is enforced, not cosmetic
 
 
 def test_on_draft_requires_a_company_when_unlocked():
-    status, _draft, meta = app._on_draft("", "bg", _UNLOCKED)
+    status, _draft, meta, _dock = list(app._on_draft("", "bg", _UNLOCKED))[-1]
     assert "Rank" in status and meta == {}
 
 
 def test_on_draft_no_contact_found(monkeypatch):
     monkeypatch.setattr(pipeline, "starter_contact", lambda c: {"found": False})
-    status, _draft, meta = app._on_draft("Acme", "bg", _UNLOCKED)
+    status, _draft, meta, _dock = list(app._on_draft("Acme", "bg", _UNLOCKED))[-1]
     assert "No connected contact" in status and meta == {}
 
 
@@ -75,8 +126,11 @@ def test_on_draft_non_compliant_shows_error_not_draft(monkeypatch):
     monkeypatch.setattr(pipeline, "starter_contact",
                         lambda c: {"found": True, "contact_name": "Maya", "title": "PM", "connection": "alum"})
     monkeypatch.setattr(pipeline, "draft_email", lambda *a: {"passed": False, "error": "too long"})
-    status, _draft, meta = app._on_draft("Acme", "bg", _UNLOCKED)
+    out = list(app._on_draft("Acme", "bg", _UNLOCKED))
+    assert any('data-state="working"' in o[3] for o in out)  # the seal swept while composing
+    status, _draft, meta, dock = out[-1]
     assert "compliant draft" in status.lower() and "regenerate" in status.lower() and meta == {}
+    assert 'data-state="working"' not in dock  # ...and settled back on the error
 
 
 def test_on_draft_success_sets_meta(monkeypatch):
@@ -84,7 +138,10 @@ def test_on_draft_success_sets_meta(monkeypatch):
                         lambda c: {"found": True, "contact_name": "Maya", "title": "PM", "connection": "alum"})
     monkeypatch.setattr(pipeline, "draft_email",
                         lambda *a: {"passed": True, "email": "Hi Maya, ...", "word_count": 80, "attempts": 1})
-    status, _draft, meta = app._on_draft("Acme", "bg", _UNLOCKED)
+    out = list(app._on_draft("Acme", "bg", _UNLOCKED))
+    assert 'data-state="working"' in out[-2][3]   # seal sweeps while composing the note
+    status, _draft, meta, dock = out[-1]
+    assert 'data-state="working"' not in dock     # settles when the draft lands
     assert meta == {"company": "Acme", "contact": "Maya"}
     assert "Maya" in status and "Acme" in status
 
@@ -92,17 +149,21 @@ def test_on_draft_success_sets_meta(monkeypatch):
 # ----- _on_approve: guard + 3B7 (draft-only) -----
 
 def test_on_approve_guards_empty_draft():
-    msg, cadence = app._on_approve("", {})
+    msg, cadence, worklog, _colophon = app._on_approve("", {})
     assert "Nothing to approve" in msg and cadence == app._CADENCE_PLACEHOLDER
+    assert not (worklog.get("chronicle"))  # a no-op guard never logs a phantom event
 
 
 def test_on_approve_schedules_3b7_and_states_draft_only(monkeypatch):
     monkeypatch.setattr(pipeline, "schedule_3b7",
                         lambda iso: {"followup_3b": "2026-06-11", "followup_7b": "2026-06-17"})
-    msg, cadence = app._on_approve("Hi Maya, ...", {"company": "Acme", "contact": "Maya"})
+    msg, cadence, worklog, colophon = app._on_approve("Hi Maya, ...", {"company": "Acme", "contact": "Maya"})
     assert "Acme" in msg and "Maya" in msg
     assert "2026-06-11" in msg and "2026-06-17" in cadence
     assert "draft-only" in msg.lower()  # the no-send guarantee is stated to the user
+    # the countersign is the one real outreach event — logged to the chronicle + the colophon ledger
+    assert any("Maya" in e and "Acme" in e for e in worklog["chronicle"])
+    assert "On your behalf" in colophon and "Maya" in colophon
 
 
 # ----- _on_source: validation + streaming -----
@@ -151,14 +212,14 @@ def _unauth():
 
 def test_on_draft_blocks_unauthenticated_when_iap_required(monkeypatch):
     monkeypatch.setenv("REQUIRE_IAP", "1")
-    status, _draft, meta = app._on_draft("Acme", "bg", _UNLOCKED, _unauth())
+    status, _draft, meta, _dock = list(app._on_draft("Acme", "bg", _UNLOCKED, _unauth()))[-1]
     assert "not authenticated" in status.lower() and meta == {}
 
 
 def test_on_prep_blocks_unauthenticated_when_iap_required(monkeypatch):
     monkeypatch.setenv("REQUIRE_IAP", "1")
     out = list(app._on_prep("Acme", "PM", _unauth()))
-    assert len(out) == 1 and "not authenticated" in out[0].lower()
+    assert len(out) == 1 and "not authenticated" in out[0][0].lower()
 
 
 def test_all_grounded_handlers_fail_closed_without_iap(monkeypatch):
@@ -167,8 +228,8 @@ def test_all_grounded_handlers_fail_closed_without_iap(monkeypatch):
     # If any handler ran its grounded call, these unconfigured pipeline fns would error — proving
     # the guard short-circuits *before* the cost-bearing path.
     assert "authenticated" in list(app._on_source("climate", "NYC", "PM", _unauth()))[0][0].lower()
-    assert "authenticated" in app._on_draft("Acme", "bg", _UNLOCKED, _unauth())[0].lower()
-    assert "authenticated" in list(app._on_prep("Acme", "PM", _unauth()))[0].lower()
+    assert "authenticated" in list(app._on_draft("Acme", "bg", _UNLOCKED, _unauth()))[0][0].lower()
+    assert "authenticated" in list(app._on_prep("Acme", "PM", _unauth()))[0][0].lower()
 
 
 # ----- _on_prep: untrusted output rendering (review MEDIUM-1) -----
@@ -178,7 +239,7 @@ def test_on_prep_escapes_user_typed_company_in_heading(monkeypatch):
     monkeypatch.setattr(pipeline, "prep",
                         lambda c, r: {"brief": "ok", "questions": {}, "grounded": True, "depth": "deep"})
     out = list(app._on_prep("Acme [x](javascript:alert(1))", "PM"))
-    final = out[-1]
+    final = out[-1][0]
     assert "informational brief" in final
     assert "](javascript:" not in final  # injected Markdown link syntax is neutralized
 
@@ -231,3 +292,136 @@ def test_on_connect_error_leaks_no_path_or_trace(monkeypatch):
         assert path not in msg and "KeyError" not in msg  # no internal path / exception surfaced
     finally:
         os.remove(path)
+
+
+# ===== Phase C: the worklog — remembered brief, chronicle ledger, auto-advance =====
+
+def test_brief_line_speaks_the_aim_back():
+    assert app._brief_line("climate", "product management", "New York") == \
+        "Watching for product management in climate, around New York."
+    # geography optional — no dangling "around"
+    assert app._brief_line("climate", "PM", "") == "Watching for PM in climate."
+    # nothing to remember yet → empty (dock stays bare, never "Watching for roles in .")
+    assert app._brief_line("", "", "") == ""
+
+
+def test_update_worklog_is_immutable_and_capped():
+    base = {"brief": "b", "chronicle": ["one"]}
+    out = app._update_worklog(base, event="two")
+    assert out["chronicle"] == ["one", "two"] and out["brief"] == "b"
+    assert base["chronicle"] == ["one"]  # original untouched (immutability)
+    # brief set without an event preserves the chronicle; only-event preserves the brief
+    assert app._update_worklog(base, brief="z")["chronicle"] == ["one"]
+    # bounded to the last _CHRONICLE_CAP events
+    big = {"brief": "", "chronicle": [str(i) for i in range(app._CHRONICLE_CAP + 5)]}
+    capped = app._update_worklog(big, event="newest")
+    assert len(capped["chronicle"]) == app._CHRONICLE_CAP and capped["chronicle"][-1] == "newest"
+
+
+def test_dock_from_carries_brief_and_count():
+    wl = {"brief": "Watching for PM in climate.", "chronicle": ["a", "b"]}
+    dock = app._dock_from(wl)
+    assert "Watching for PM in climate." in dock and "2 on your behalf" in dock
+    # empty worklog → bare dock (no brief span, no chronicle chip)
+    bare = app._dock_from({})
+    assert "dock-brief" not in bare and "on your behalf" not in bare
+
+
+def test_colophon_ledger_renders_only_real_events():
+    assert "On your behalf" not in app._colophon_html([])           # nothing yet → no ledger
+    led = app._colophon_html(["Sourced 40 target employers."])
+    assert "On your behalf" in led and "Sourced 40 target employers." in led
+
+
+def test_nav_updates_docks_the_brief_after_connect_but_not_on_the_cover():
+    wl = {"brief": "Watching for PM in climate.", "chronicle": ["x"]}
+    # Connect (step 0) is the full cover plate — the dock brief does NOT show there
+    cover_mast = app._nav_updates(0, wl)[-1]["value"]
+    assert "Watching for PM" not in cover_mast
+    # any step past the cover docks the remembered brief + count
+    rate_mast = app._nav_updates(2, wl)[-1]["value"]
+    assert "Watching for PM in climate." in rate_mast and "1 on your behalf" in rate_mast
+
+
+def test_auto_advance_only_through_satisfied_gates():
+    wl = {"brief": "", "chronicle": []}
+    # Source→Rate only once employers landed; otherwise hold on Source (step 1)
+    assert app._advance_if_sourced([_rec("Acme")], wl)[-2] == 2
+    assert app._advance_if_sourced([], wl)[-2] == 1
+    # Approve→3B7 only once a real outreach was countersigned (meta present); else hold on Outreach (4)
+    assert app._advance_if_approved({"company": "Acme", "contact": "Maya"}, wl)[-2] == 5
+    assert app._advance_if_approved({}, wl)[-2] == 4
+
+
+def test_on_source_remembers_brief_and_logs_the_chronicle(monkeypatch):
+    monkeypatch.delenv("REQUIRE_IAP", raising=False)
+    monkeypatch.setattr(pipeline, "source_targets",
+                        lambda i, g, f: {"organizations": [_rec("Acme"), _rec("Beta")], "count": 2,
+                                         "grounded": True, "met_minimum": False, "fallback": False})
+    out = list(app._on_source("climate", "New York", "product management", worklog={"brief": "", "chronicle": []}))
+    final_worklog, final_colophon = out[-1][5], out[-1][6]
+    assert final_worklog["brief"] == "Watching for product management in climate, around New York."
+    assert final_worklog["chronicle"] == ["Sourced 2 target employers."]  # real count, real event
+    assert "On your behalf" in final_colophon and "Sourced 2 target employers." in final_colophon
+    # the brief is remembered from the first (searching) frame, before results land
+    assert "Watching for product management" in out[0][5]["brief"]
+
+
+def test_on_prep_logs_a_real_interview_event(monkeypatch):
+    monkeypatch.delenv("REQUIRE_IAP", raising=False)
+    monkeypatch.setattr(pipeline, "prep",
+                        lambda c, r: {"brief": "ok", "questions": {}, "grounded": True, "depth": "deep"})
+    out = list(app._on_prep("Acme", "PM", worklog={"brief": "b", "chronicle": []}))
+    final_worklog, final_colophon = out[-1][2], out[-1][3]
+    assert final_worklog["chronicle"] == ["Prepared an interview brief for Acme."]
+    assert final_worklog["brief"] == "b"  # prep preserves the remembered brief
+    assert "Prepared an interview brief for Acme." in final_colophon
+
+
+# ===== Phase D: the command line (deterministic router; NEVER fires a grounded call) =====
+# _on_command returns [cmd_clear, status, industry, geography, function, outreach_co, prep_co] + nav,
+# where nav = groups(7) + rail(7) + [step, masthead]. So out[-2] is the step target, out[2:5] the brief.
+
+def _wl():
+    return {"brief": "", "chronicle": []}
+
+
+def test_on_command_navigates_and_clears_the_input():
+    out = app._on_command("go to rate", 0, _wl())
+    assert out[-2] == 2                      # routed to Rate (step 2)
+    assert out[0].get("value") == ""         # the command input is cleared after running
+    assert "Rate" in out[1]                  # status confirms the destination
+
+
+def test_on_command_source_prefills_brief_and_routes_without_firing_grounded():
+    out = app._on_command("find product management in climate near NYC", 0, _wl())
+    assert out[-2] == 1                                   # routes to Source (does NOT run it)
+    assert out[2].get("value") == "climate"              # industry prefilled
+    assert out[3].get("value") == "NYC"                  # geography prefilled
+    assert out[4].get("value") == "product management"   # function prefilled
+    # the status makes the confirm-before-fire explicit: the USER clicks to spend
+    assert "Find target employers" in out[1] and "you spend" in out[1].lower()
+
+
+def test_on_command_prep_sets_company_and_routes_to_prep():
+    out = app._on_command("prep Patagonia", 2, _wl())
+    assert out[-2] == 6 and out[6].get("value") == "Patagonia"
+    assert "Prepare TIARA questions" in out[1]
+
+
+def test_on_command_draft_sets_company_routes_and_restates_no_send():
+    out = app._on_command("draft to Maya", 3, _wl())
+    assert out[-2] == 4 and out[5].get("value") == "Maya"
+    assert "sent" in out[1].lower()  # restates the draft-only / no-send guarantee
+
+
+def test_on_command_help_and_unknown_hold_the_current_step():
+    h = app._on_command("help", 2, _wl())
+    assert h[-2] == 2 and "navigate" in h[1].lower()  # help doesn't move you
+    u = app._on_command("make me a sandwich", 3, _wl())
+    assert u[-2] == 3 and "catch" in u[1].lower()     # unknown holds position + offers examples
+
+
+def test_on_command_noop_is_silent_and_holds_position():
+    out = app._on_command("   ", 4, _wl())
+    assert out[-2] == 4 and out[1] == ""              # blank input → no status, no move

@@ -141,7 +141,7 @@ body, gradio-app, .gradio-container {
 .gradio-container {
   width: min(1040px, 100vw) !important;
   margin: 0 auto !important;
-  padding: 0 56px 110px !important;
+  padding: 0 56px 48px !important;
   overflow-x: hidden;
   color: var(--ink);
   font-family: var(--sans);
@@ -163,13 +163,20 @@ footer { display: none !important; }
 #ratings-json { display: none !important; }
 
 /* ---------- MASTHEAD (dark "cover plate", full column width) ---------- */
-#adv-masthead .masthead { margin: 0 -56px; padding: 46px 56px 34px; background: radial-gradient(135% 150% at 26% -32%, rgba(255,238,214,.07) 0%, transparent 58%), linear-gradient(168deg, #2b231b 0%, var(--cover-ink) 60%, #161009 100%); box-shadow: inset 0 1px 0 rgba(255,245,232,.10), inset 0 -1px 0 rgba(0,0,0,.35), 0 14px 30px -20px rgba(20,15,10,.55); }
+/* the full-bleed band (margin:0 -56px) is wider than the gr.HTML wrapper, which defaults to
+   overflow-x:auto → a stray horizontal scrollbar. overflow:visible lets it bleed; the centered
+   .gradio-container (overflow-x:hidden) clips it at the column edge. */
+#adv-masthead { overflow: visible !important; }
+/* the masthead is a nav/handler OUTPUT, so Gradio flashes its grey "generating" overlay + a "0.0s"
+   timer on it. Suppress that chrome — the agent's state is shown by the seal, not a Gradio spinner. */
+#adv-masthead .progress-text { display: none !important; }
+#adv-masthead .masthead { margin: 0 -56px; padding: 30px 56px 22px; background: radial-gradient(135% 150% at 26% -32%, rgba(255,238,214,.07) 0%, transparent 58%), linear-gradient(168deg, #2b231b 0%, var(--cover-ink) 60%, #161009 100%); box-shadow: inset 0 1px 0 rgba(255,245,232,.10), inset 0 -1px 0 rgba(0,0,0,.35), 0 14px 30px -20px rgba(20,15,10,.55); }
 /* a dateline band, ruled top + bottom in cream hairlines, tracked small caps */
 .dateline { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 11px 2px; border-top: 1px solid rgba(247,244,238,.30); border-bottom: 1px solid rgba(247,244,238,.30); font-family: var(--sans); font-size: 11px; font-weight: 600; letter-spacing: .17em; text-transform: uppercase; }
 .dateline span { color: rgba(247,244,238,.66); }
 .dateline .fleuron { color: var(--accent-bright); font-family: var(--serif); font-size: 21px; letter-spacing: 0; line-height: 1; }
 /* the nameplate — plain inline text (no flex), so the leading A never blockifies/displaces */
-.nameplate-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin: 22px 0 0; }
+.nameplate-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin: 14px 0 0; }
 .wordmark { font-family: var(--serif); font-optical-sizing: auto; font-weight: 450; font-size: clamp(48px, 7vw, 80px); letter-spacing: -.03em; color: var(--paper); line-height: .96; margin: 0; white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,.4); }
 .wordmark::first-letter { font-weight: 540; }
 .wordmark .dot { color: var(--accent-bright); font-weight: 540; }
@@ -178,14 +185,35 @@ footer { display: none !important; }
 .seal-svg { width: 96px; height: 96px; display: block; }
 .seal-disc { fill: var(--accent-bright); }
 .seal-ringline { fill: none; stroke: rgba(247,244,238,.92); stroke-width: 0.6; opacity: .85; }
-.seal-ring { fill: var(--paper); font-family: var(--sans); font-size: 6.5px; font-weight: 600; letter-spacing: 1.45px; }
+.seal-ring { fill: var(--paper); font-family: var(--sans); font-size: 6.5px; font-weight: 600; letter-spacing: 0.7px; }
 .seal-mono { fill: var(--paper); font-family: var(--serif); font-optical-sizing: auto; font-size: 40px; font-weight: 500; }
 .seal-fleuron { fill: var(--paper); font-family: var(--serif); font-size: 9px; }
-.tagline { margin: 18px 0 0; font-family: var(--read); font-size: 19px; line-height: 1.5; color: rgba(247,244,238,.82); max-width: 605px; }
+.tagline { margin: 12px 0 0; font-family: var(--read); font-size: 18px; line-height: 1.45; color: rgba(247,244,238,.82); max-width: 605px; }
 .tagline em { color: var(--accent-bright); font-style: italic; }
 .tagline .dropcap { float: left; font-family: var(--serif); font-optical-sizing: auto; font-weight: 430; font-size: 58px; line-height: .78; padding: 6px 11px 0 0; color: var(--accent-bright); text-shadow: 0 1px 2px rgba(0,0,0,.35); }
 /* a cream thick + thin double rule closes the cover plate, cleared past the drop cap float */
-#adv-masthead .masthead::after { content: ""; display: block; clear: both; height: 3px; margin-top: 28px; border-top: 2px solid var(--paper); border-bottom: 1px solid rgba(247,244,238,.5); }
+#adv-masthead .masthead::after { content: ""; display: block; clear: both; height: 3px; margin-top: 16px; border-top: 2px solid var(--paper); border-bottom: 1px solid rgba(247,244,238,.5); }
+
+/* ---------- DOCK — the cover plate compacted to a standing-agent header (steps 1–6) ---------- */
+#adv-masthead .masthead.mast-compact { margin: 0 -56px; padding: 0 56px; background: linear-gradient(168deg, #271f19 0%, var(--cover-ink) 70%, #161009 100%); box-shadow: inset 0 -1px 0 rgba(0,0,0,.4), 0 10px 24px -18px rgba(20,15,10,.5); }
+#adv-masthead .masthead.mast-compact::after { display: none; }
+.dock { display: flex; align-items: center; gap: 16px; min-height: 64px; padding: 11px 0; }
+.dock-seal { width: 42px; height: 42px; flex: 0 0 auto; filter: drop-shadow(0 2px 5px rgba(0,0,0,.4)); }
+.dock-seal .seal-svg { width: 42px; height: 42px; }
+.dock-seal .seal-ring { display: none; }   /* ring micro-type is illegible at 42px — disc + monogram only */
+.dock-id { display: flex; align-items: baseline; gap: 14px; min-width: 0; }
+.dock-name { font-family: var(--serif); font-optical-sizing: auto; font-weight: 480; font-size: 22px; letter-spacing: -.02em; color: var(--paper); line-height: 1; }
+.dock-name .dot { color: var(--accent-bright); }
+.dock-brief { font-family: var(--read); font-style: italic; font-size: 13.5px; color: rgba(247,244,238,.64); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dock-chron { margin-left: auto; flex: 0 0 auto; font-family: var(--sans); font-size: 10.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: rgba(247,244,238,.55); }
+/* the agent AT WORK: a slow oxblood arc sweeps the seal during a grounded call; the dock narrates it */
+.dock-seal { position: relative; }
+.dock-seal[data-state="working"]::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 1.6px solid transparent; border-top-color: var(--accent-bright); animation: dock-sweep .9s linear infinite; }
+@keyframes dock-sweep { to { transform: rotate(360deg); } }
+.dock-status { font-family: var(--read); font-style: italic; font-size: 13.5px; color: rgba(247,244,238,.84); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (prefers-reduced-motion: reduce) {
+  .dock-seal[data-state="working"]::after { animation: none; border: 1.6px solid var(--accent-bright); opacity: .5; }
+}
 
 /* ---------- STEP LEDGER (the 7 nav buttons, restyled) ---------- */
 #rail {
@@ -215,14 +243,19 @@ footer { display: none !important; }
 .rail-btn.step-done::before { color: var(--ink-faint); }
 
 /* ---------- EDITORIAL SECTION HEADS ---------- */
-.sec-head { display: grid; grid-template-columns: 140px 1fr; gap: 0; align-items: start; margin: 60px 0 28px; }
+.sec-head { display: grid; grid-template-columns: 140px 1fr; gap: 0; align-items: start; margin: 30px 0 22px; }
 .sec-index { font-family: var(--serif); font-optical-sizing: auto; font-size: 68px; font-weight: 380; color: var(--accent); line-height: .8; letter-spacing: -.015em; padding-top: 0; text-shadow: 0 1px 0 rgba(255,255,255,.5); }
 .sec-index .rule-no { display: block; font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 11px; }
 .sec-title { font-family: var(--serif); font-optical-sizing: auto; font-weight: 420; font-size: 36px; line-height: 1.06; letter-spacing: -.02em; color: var(--ink); margin: 0; }
 .sec-sub { margin-top: 9px; font-family: var(--read); font-size: 16px; line-height: 1.5; color: var(--ink-soft); max-width: 560px; }
 
-/* ---------- CONNECT FORM (Gradio inputs as editorial fields) ---------- */
-#adv-connect-panel { background: var(--paper-card) !important; border: 1px solid var(--rule) !important; border-radius: 10px !important; box-shadow: var(--shadow-card), var(--sheen) !important; padding: 8px 12px !important; overflow: hidden; }
+/* ---------- CONNECT = the cover's "brief": a slim prompt + a 2×2 field grid ---------- */
+.brief-prompt { font-family: var(--read); font-size: 16px; color: var(--ink-soft); margin: 20px 0 14px; }
+.brief-prompt .bp-eyebrow { font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; color: var(--accent); margin-right: 14px; }
+/* Gradio's gr.Row is display:grid — set explicit equal columns for a true side-by-side 2×2 */
+#adv-connect-panel .brief-row { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 28px !important; }
+#adv-connect-panel .brief-row > * { min-width: 0 !important; }
+#adv-connect-panel { background: var(--paper-card) !important; border: 1px solid var(--rule) !important; border-radius: 10px !important; box-shadow: var(--shadow-card), var(--sheen) !important; padding: 8px 18px !important; overflow: hidden; }
 #adv-connect-panel .block, #adv-connect-panel .form, #adv-connect-panel > .styler { background: transparent !important; border: none !important; box-shadow: none !important; }
 .adv-field, .adv-field > .styler, .adv-field .block, .adv-field .form { background: transparent !important; border: none !important; box-shadow: none !important; }
 .adv-field label > span, .adv-field span[data-testid="block-info"] { font-family: var(--sans) !important; font-size: 12px !important; font-weight: 600 !important; letter-spacing: .04em !important; color: var(--ink-soft) !important; margin-bottom: 8px !important; }
@@ -234,8 +267,9 @@ footer { display: none !important; }
 }
 .adv-field input::placeholder, .adv-field textarea::placeholder { color: var(--ink-ghost) !important; font-style: italic; }
 .adv-field input:focus, .adv-field textarea:focus { border-bottom-color: var(--accent) !important; outline: none !important; }
-#adv-upload { background: var(--paper-sunk) !important; border: none !important; border-top: 1px solid var(--rule) !important; border-radius: 0 0 10px 10px !important; }
-#adv-upload .wrap, #adv-upload label { font-family: var(--read) !important; color: var(--ink-faint) !important; }
+/* the alumni-CSV upload as a single slim editorial line (gr.UploadButton, not a tall dropzone) */
+#adv-upload.adv-upload-btn { background: var(--paper-sunk) !important; color: var(--ink-faint) !important; border: 1px dashed var(--rule-strong) !important; border-radius: 8px !important; box-shadow: none !important; font-family: var(--read) !important; font-style: italic !important; font-size: 13.5px !important; font-weight: 400 !important; letter-spacing: 0 !important; padding: 11px 16px !important; min-height: 0 !important; height: auto !important; width: 100% !important; justify-content: flex-start !important; margin: 6px 0 2px !important; transition: border-color .2s, color .2s !important; }
+#adv-upload.adv-upload-btn:hover { border-color: var(--ink-faint) !important; color: var(--ink-soft) !important; }
 
 /* ---------- RATE — the hero roster ---------- */
 .rate-progress { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding: 0 2px 18px; border-bottom: 1.5px solid var(--ink); margin-bottom: 4px; }
@@ -249,6 +283,14 @@ footer { display: none !important; }
 .measure > span { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 2px; transition: width .4s cubic-bezier(.2,.7,.2,1); }
 
 .roster { padding: 0; }
+/* the ~40-row Rate roster scrolls INTERNALLY so the page itself never scrolls (no-scroll shell);
+   the progress masthead + dock stay pinned above it. Rank's 5-row list is short, so it's unscoped. */
+/* Reserve enough for the full non-roster column (masthead + rail + command line + sec-head +
+   progress + rank CTA + the colophon/ledger) so the page itself never scrolls — only the roster
+   does, internally. Measured: non-roster content is ~775px (incl. the Phase-D command bar). */
+#adv-rate .roster { max-height: calc(100vh - 845px); min-height: 200px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--rule-strong) transparent; padding-right: 6px; -webkit-overflow-scrolling: touch; }
+#adv-rate .roster::-webkit-scrollbar { width: 7px; }
+#adv-rate .roster::-webkit-scrollbar-thumb { background: var(--rule-strong); border-radius: 4px; }
 .row { display: grid; grid-template-columns: 36px 1fr auto; align-items: center; gap: 22px; padding: 22px 4px; border-bottom: 1px solid var(--rule); transition: background .18s; }
 .row:last-child { border-bottom: none; }
 .row .rank { font-family: var(--serif); font-optical-sizing: auto; font-size: 22px; font-weight: 420; color: var(--ink-faint); text-align: right; }
@@ -267,6 +309,10 @@ footer { display: none !important; }
 .alum.yes { color: var(--affirm); }
 .alum.no { color: var(--ink-ghost); }
 .alum .who { font-family: var(--read); font-style: italic; font-weight: 400; font-size: 13.5px; letter-spacing: 0; text-transform: none; }
+/* the agent's receipt — why this employer surfaced + which LAMP lens(es). Shown only when grounded. */
+.receipt { margin-top: 9px; display: flex; align-items: baseline; gap: 11px; max-width: 560px; }
+.receipt .r-lens { flex: 0 0 auto; font-family: var(--sans); font-size: 9.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); white-space: nowrap; padding-top: 1px; }
+.receipt .r-why { font-family: var(--read); font-style: italic; font-size: 13px; line-height: 1.42; color: var(--ink-faint); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
 .rater { display: inline-flex; align-items: stretch; border: 1px solid var(--rule-strong); border-radius: 9px; overflow: hidden; background: var(--paper-card); box-shadow: inset 0 1px 0 rgba(255,255,255,.6); }
 .rater button { appearance: none; border: none; background: transparent; border-left: 1px solid var(--rule); width: 38px; height: 42px; font-family: var(--serif); font-weight: 440; font-size: 17px; color: var(--ink-faint); cursor: pointer; font-feature-settings: "tnum" 1; transition: background .15s, color .15s; }
@@ -337,10 +383,35 @@ footer { display: none !important; }
 .adv-status p, .adv-status { font-family: var(--read) !important; color: var(--ink-soft) !important; font-size: 15px !important; }
 .adv-status b, .adv-status strong { color: var(--ink) !important; font-family: var(--sans) !important; }
 
-/* ---------- COLOPHON ---------- */
-#adv-colophon .colophon { margin-top: 72px; padding-top: 22px; border-top: 1.5px solid var(--ink); display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; color: var(--ink-faint); letter-spacing: .02em; }
+/* ---------- COMMAND LINE (Phase D) ---------- */
+#adv-cmd { margin: 12px 0 4px !important; gap: 4px !important; border: none !important; background: transparent !important; }
+#adv-cmd-input { position: relative; }
+#adv-cmd-input::before { content: "\203A"; position: absolute; left: 14px; top: 21px; z-index: 3; font-family: var(--serif); font-size: 17px; line-height: 1; color: var(--accent); pointer-events: none; }
+#adv-cmd-input textarea, #adv-cmd-input input { font-family: var(--sans) !important; font-size: 13.5px !important; color: var(--ink) !important; background: var(--paper-card) !important; border: 1px solid var(--rule-strong) !important; border-radius: 8px !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.5) !important; padding: 9px 14px 9px 32px !important; min-height: 0 !important; transition: border-color .2s !important; }
+#adv-cmd-input textarea:focus, #adv-cmd-input input:focus { border-color: var(--accent) !important; box-shadow: 0 0 0 3px rgba(154,43,30,.18) !important; outline: none !important; }
+#adv-cmd-input textarea::placeholder, #adv-cmd-input input::placeholder { color: var(--ink-ghost) !important; font-style: italic; }
+/* Bound the status to ~2 lines so a long reply (e.g. help) can't push a viewport-tight step past
+   the fold. max-height is the hard guard (works across Gradio's <p> wrapper); the line-clamp on the
+   inner paragraph keeps the truncation clean rather than cutting mid-line. */
+.cmd-status { font-family: var(--read) !important; font-size: 13px !important; line-height: 1.4 !important; color: var(--ink-soft) !important; min-height: 0 !important; padding: 0 2px !important; max-height: 38px !important; overflow: hidden !important; }
+.cmd-status p { margin: 0 !important; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cmd-status:empty { display: none !important; }
+
+/* ---------- COLOPHON + the "on your behalf" ledger ---------- */
+#adv-colophon .colophon { margin-top: 22px; padding-top: 14px; border-top: 1.5px solid var(--ink); display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; color: var(--ink-faint); letter-spacing: .02em; }
 .colophon .mark { font-family: var(--serif); font-weight: 500; color: var(--ink-soft); }
 .colophon .mark .dot { color: var(--accent); }
+/* The chronicle: a printed ledger of the real actions the agent took. Sits above the colophon row;
+   when present it owns the top rule, so the colophon's own rule is dropped to avoid a double line.
+   Height-capped (scrolls internally past a few events) so it never pushes a step past the viewport. */
+.ledger { margin-top: 14px; padding-top: 11px; border-top: 1.5px solid var(--ink); }
+.ledger-head { display: block; font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 6px; }
+.ledger-list { margin: 0; padding-left: 1.2em; list-style: decimal; max-height: 46px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--rule-strong) transparent; }
+.ledger-list li { font-family: var(--read); font-size: 13px; line-height: 1.5; color: var(--ink-soft); padding-left: 3px; }
+.ledger-list li::marker { font-family: var(--serif); font-feature-settings: "tnum" 1; color: var(--ink-faint); }
+.ledger + .colophon { border-top: none; margin-top: 12px; padding-top: 0; }
+@media (prefers-reduced-motion: no-preference) { .ledger-list li { animation: ledger-in .35s ease both; } }
+@keyframes ledger-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
 
 /* ---------- a11y + responsive ---------- */
 *:focus-visible { outline: 2.5px solid var(--accent) !important; outline-offset: 2px !important; border-radius: 3px; }
