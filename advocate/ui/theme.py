@@ -163,6 +163,13 @@ footer { display: none !important; }
 #ratings-json { display: none !important; }
 
 /* ---------- MASTHEAD (dark "cover plate", full column width) ---------- */
+/* the full-bleed band (margin:0 -56px) is wider than the gr.HTML wrapper, which defaults to
+   overflow-x:auto → a stray horizontal scrollbar. overflow:visible lets it bleed; the centered
+   .gradio-container (overflow-x:hidden) clips it at the column edge. */
+#adv-masthead { overflow: visible !important; }
+/* the masthead is a nav/handler OUTPUT, so Gradio flashes its grey "generating" overlay + a "0.0s"
+   timer on it. Suppress that chrome — the agent's state is shown by the seal, not a Gradio spinner. */
+#adv-masthead .progress-text { display: none !important; }
 #adv-masthead .masthead { margin: 0 -56px; padding: 30px 56px 22px; background: radial-gradient(135% 150% at 26% -32%, rgba(255,238,214,.07) 0%, transparent 58%), linear-gradient(168deg, #2b231b 0%, var(--cover-ink) 60%, #161009 100%); box-shadow: inset 0 1px 0 rgba(255,245,232,.10), inset 0 -1px 0 rgba(0,0,0,.35), 0 14px 30px -20px rgba(20,15,10,.55); }
 /* a dateline band, ruled top + bottom in cream hairlines, tracked small caps */
 .dateline { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 11px 2px; border-top: 1px solid rgba(247,244,238,.30); border-bottom: 1px solid rgba(247,244,238,.30); font-family: var(--sans); font-size: 11px; font-weight: 600; letter-spacing: .17em; text-transform: uppercase; }

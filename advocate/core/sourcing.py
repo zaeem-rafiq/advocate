@@ -183,29 +183,39 @@ def parse_orgs(raw: str | None) -> Tuple[SourcedOrg, ...]:
 def merge_orgs(
     existing: Iterable[SourcedOrg], new: Iterable[SourcedOrg]
 ) -> Tuple[SourcedOrg, ...]:
-    """Dedupe by case-insensitive company name, folding a dup into the existing record.
+    """Dedupe by company IDENTITY (name + domain), folding a true dup into the existing record.
 
-    A refine pass merges its orgs AFTER the ones already collected. A company already
-    present (case-insensitively, whether from `existing` or earlier in `new`) is NOT added
-    as a new row; instead its `lenses` are UNIONed with the dup's (canonical order),
-    `has_alumni` is OR-ed, and a blank `rationale` / identity field (domain/sector/location)
-    is back-filled from the dup (first non-blank wins). So the count grows only by genuinely
-    new organizations, but a dup found under a different lens enriches — never overwrites —
-    the record. Blank names are dropped. Pure: returns new records, inputs untouched.
+    A refine pass merges its orgs AFTER the ones already collected. Two orgs are the SAME
+    company when their names match case-insensitively AND they don't carry two non-blank domains
+    that disagree — that domain guard keeps DISTINCT real companies that merely share a name apart
+    (e.g. "Arcadia" the community-solar firm vs Arcadia.io the healthcare-analytics firm), so one
+    can never graft its sector/"why" onto the other (which produced confidently-wrong receipts).
+    A true dup is NOT added as a new row; instead its `lenses` are UNIONed (canonical order),
+    `has_alumni` is OR-ed, and a blank `rationale`/identity field (domain/sector/location) is
+    back-filled from it (first non-blank wins). A same-name-but-rival-domain org is kept as its OWN
+    row. So the count grows only by genuinely distinct organizations, and a true dup found under a
+    different lens enriches — never overwrites — the record. Blank names are dropped. Pure: returns
+    new records, inputs untouched.
     """
+    def _same_company(a: SourcedOrg, b: SourcedOrg) -> bool:
+        # same name already; DIFFERENT only when both carry a non-blank domain that disagrees.
+        da, db = a.domain.strip().casefold(), b.domain.strip().casefold()
+        return not (da and db and da != db)
+
     merged: List[SourcedOrg] = list(existing)
-    index: Dict[str, int] = {}
+    index: Dict[str, List[int]] = {}  # casefolded name -> indices (>1 when a name has rival domains)
     for i, o in enumerate(merged):
         key = o.company.strip().casefold()
         if key:
-            index.setdefault(key, i)
+            index.setdefault(key, []).append(i)
     for o in new:
         key = o.company.strip().casefold()
         if not key:
             continue
-        if key in index:
-            cur = merged[index[key]]
-            merged[index[key]] = replace(
+        target = next((i for i in index.get(key, []) if _same_company(merged[i], o)), None)
+        if target is not None:
+            cur = merged[target]
+            merged[target] = replace(
                 cur,
                 lenses=_canonical_lenses(cur.lenses + o.lenses),
                 has_alumni=cur.has_alumni or o.has_alumni,
@@ -215,7 +225,7 @@ def merge_orgs(
                 location=cur.location or o.location,
             )
         else:
-            index[key] = len(merged)
+            index.setdefault(key, []).append(len(merged))
             merged.append(o)
     return tuple(merged)
 

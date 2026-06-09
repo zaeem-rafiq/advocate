@@ -69,6 +69,11 @@ def _esc(s) -> str:
     return html.escape(str(s if s is not None else ""), quote=True)
 
 
+def _lens_label(lens) -> str:
+    """Humanize a raw LAMP lens key ('active_postings') for display ('active postings')."""
+    return str(lens).replace("_", " ")
+
+
 def _on_connect(f):
     """Validate an uploaded contacts CSV (display only; demo sourcing uses the seeded data)."""
     if not f:
@@ -204,7 +209,7 @@ def _rate_html(records: list, ratings: dict | None = None) -> str:
             rater_cls, data_val, cell_cls, hint = "rater", "", "", "Your turn"
         # the agent's receipt: WHY this employer surfaced (rationale) + which LAMP lenses. Both are
         # already computed during sourcing (blank in seed mode) — surface it, never invent it.
-        rlenses = " · ".join(_esc(l) for l in (r.get("lenses") or [])[:3])
+        rlenses = " · ".join(_esc(_lens_label(l)) for l in (r.get("lenses") or [])[:3])
         why = _esc(r.get("rationale", "") or "")
         receipt = ""
         if rlenses or why:
@@ -236,7 +241,7 @@ def _ranked_html(ranked: list) -> str:
         alum = "In your network" if o.get("has_alumni") else "No alum yet"
         mot = o.get("motivation")
         mot_disp = _esc(mot) if mot is not None else "—"
-        lenses = "".join(f'<span class="lens">{_esc(l)}</span>' for l in (o.get("lenses") or []))
+        lenses = "".join(f'<span class="lens">{_esc(_lens_label(l))}</span>' for l in (o.get("lenses") or []))
         lenses_html = f'<div class="lenses">{lenses}</div>' if lenses else ""
         rows.append(
             '<article class="row">'
@@ -583,7 +588,8 @@ def build_app() -> gr.Blocks:
 
         nav_outputs = groups + rail_buttons + [step, masthead]
         for i, button in enumerate(rail_buttons):
-            button.click(fn=functools.partial(_nav_updates, i), outputs=nav_outputs)
+            # show_progress="hidden": nav is instant; don't flash Gradio's grey overlay/timer on the dock.
+            button.click(fn=functools.partial(_nav_updates, i), outputs=nav_outputs, show_progress="hidden")
 
         source_btn.click(_on_source, inputs=[industry_in, geography_in, function_in],
                          outputs=[source_status, rate_roster, records_state, ratings_json])

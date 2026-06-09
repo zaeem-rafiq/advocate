@@ -25,7 +25,8 @@ def test_rate_html_shows_the_why_receipt_when_grounded():
     """Each Rate row surfaces WHY it surfaced (rationale) + its LAMP lenses — when grounded."""
     html = app._rate_html([_rec("Helio Grid", posting=3, alum=True)])
     assert 'class="receipt"' in html
-    assert "dream_peers" in html   # the lens label
+    assert "dream peers" in html   # the humanized lens label (raw key is "dream_peers")
+    assert "dream_peers" not in html  # raw key never leaks to the UI
     assert "why" in html           # the rationale text
 
 
