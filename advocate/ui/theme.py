@@ -123,10 +123,12 @@ ADVOCATE_CSS = r"""
   --paper: #f7f4ee; --paper-card: #fdfbf6; --paper-sunk: #f1ede4;
   --ink: #1c1a17; --ink-soft: #4a463f; --ink-faint: #68635c; --ink-ghost: #736e67;
   --rule: #e2dccf; --rule-strong: #cfc7b6;
-  --accent: #9a2b1e; --accent-deep: #7d2218; --accent-tint: #f0e3df;
+  --accent: #9a2b1e; --accent-deep: #7d2218; --accent-tint: #f0e3df; --accent-bright: #d8704f;
+  --cover-ink: #211b16;
   --affirm: #3f6149; --affirm-tint: #e6ece6;
-  --shadow-card: 0 1px 2px rgba(40,33,22,.04), 0 8px 24px -14px rgba(40,33,22,.22);
-  --shadow-lift: 0 2px 4px rgba(40,33,22,.05), 0 18px 40px -20px rgba(40,33,22,.30);
+  --shadow-card: 0 1px 2px rgba(40,33,22,.05), 0 16px 38px -20px rgba(40,33,22,.30);
+  --shadow-lift: 0 2px 5px rgba(40,33,22,.06), 0 30px 60px -26px rgba(40,33,22,.36);
+  --sheen: inset 0 1px 0 rgba(255,255,255,.8);
   --serif: "Fraunces", Georgia, "Times New Roman", serif;
   --read: "Newsreader", Georgia, serif;
   --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -148,23 +150,42 @@ main.fillable, .gradio-container > main { width: 100% !important; max-width: 100
 footer { display: none !important; }
 ::selection { background: var(--accent-tint); color: var(--accent-deep); }
 
+/* a fine, fixed paper grain over the whole canvas — tactile tooth, never blocks input */
+.gradio-container::after {
+  content: ""; position: fixed; inset: 0; z-index: 2; pointer-events: none; opacity: .05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='pg'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23pg)'/%3E%3C/svg%3E");
+}
+
 /* neutralize Gradio's default block chrome where we want bare editorial surfaces */
 .gradio-container .gap { gap: 0 !important; }
 .adv-bare, .adv-bare > .styler { background: transparent !important; border: none !important; box-shadow: none !important; padding: 0 !important; }
 /* the rater bridge's backing field — kept in the DOM (so JS can write it) but never shown */
 #ratings-json { display: none !important; }
 
-/* ---------- MASTHEAD ---------- */
-#adv-masthead .masthead { padding: 44px 0 26px; border-bottom: 1.5px solid var(--ink); }
-.masthead-top { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; }
-.wordmark { font-family: var(--serif); font-optical-sizing: auto; font-weight: 480; font-size: 40px; letter-spacing: -.022em; color: var(--ink); line-height: 1; display: inline-flex; align-items: baseline; margin: 0; }
-.wordmark .glyph-a { font-weight: 560; }
-.wordmark .dot { color: var(--accent); font-weight: 560; margin-left: 1px; }
-.masthead-meta { text-align: right; line-height: 1.4; }
-.masthead-meta .issue { font-family: var(--read); font-style: italic; font-size: 14px; color: var(--ink-soft); }
-.masthead-meta .vol { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-ghost); margin-top: 3px; }
-.tagline { margin: 14px 0 0; font-family: var(--read); font-size: 19px; line-height: 1.45; color: var(--ink-soft); max-width: 640px; }
-.tagline em { color: var(--accent); font-style: italic; }
+/* ---------- MASTHEAD (dark "cover plate", full column width) ---------- */
+#adv-masthead .masthead { margin: 0 -56px; padding: 46px 56px 34px; background: radial-gradient(135% 150% at 26% -32%, rgba(255,238,214,.07) 0%, transparent 58%), linear-gradient(168deg, #2b231b 0%, var(--cover-ink) 60%, #161009 100%); box-shadow: inset 0 1px 0 rgba(255,245,232,.10), inset 0 -1px 0 rgba(0,0,0,.35), 0 14px 30px -20px rgba(20,15,10,.55); }
+/* a dateline band, ruled top + bottom in cream hairlines, tracked small caps */
+.dateline { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 11px 2px; border-top: 1px solid rgba(247,244,238,.30); border-bottom: 1px solid rgba(247,244,238,.30); font-family: var(--sans); font-size: 11px; font-weight: 600; letter-spacing: .17em; text-transform: uppercase; }
+.dateline span { color: rgba(247,244,238,.66); }
+.dateline .fleuron { color: var(--accent-bright); font-family: var(--serif); font-size: 21px; letter-spacing: 0; line-height: 1; }
+/* the nameplate — plain inline text (no flex), so the leading A never blockifies/displaces */
+.nameplate-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin: 22px 0 0; }
+.wordmark { font-family: var(--serif); font-optical-sizing: auto; font-weight: 450; font-size: clamp(48px, 7vw, 80px); letter-spacing: -.03em; color: var(--paper); line-height: .96; margin: 0; white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,.4); }
+.wordmark::first-letter { font-weight: 540; }
+.wordmark .dot { color: var(--accent-bright); font-weight: 540; }
+/* the wax seal — reversed for the dark plate (cream contents on a bright-oxblood disc) */
+.seal { flex: 0 0 auto; width: 96px; height: 96px; filter: drop-shadow(0 3px 9px rgba(0,0,0,.5)); }
+.seal-svg { width: 96px; height: 96px; display: block; }
+.seal-disc { fill: var(--accent-bright); }
+.seal-ringline { fill: none; stroke: rgba(247,244,238,.92); stroke-width: 0.6; opacity: .85; }
+.seal-ring { fill: var(--paper); font-family: var(--sans); font-size: 6.5px; font-weight: 600; letter-spacing: 1.45px; }
+.seal-mono { fill: var(--paper); font-family: var(--serif); font-optical-sizing: auto; font-size: 40px; font-weight: 500; }
+.seal-fleuron { fill: var(--paper); font-family: var(--serif); font-size: 9px; }
+.tagline { margin: 18px 0 0; font-family: var(--read); font-size: 19px; line-height: 1.5; color: rgba(247,244,238,.82); max-width: 605px; }
+.tagline em { color: var(--accent-bright); font-style: italic; }
+.tagline .dropcap { float: left; font-family: var(--serif); font-optical-sizing: auto; font-weight: 430; font-size: 58px; line-height: .78; padding: 6px 11px 0 0; color: var(--accent-bright); text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+/* a cream thick + thin double rule closes the cover plate, cleared past the drop cap float */
+#adv-masthead .masthead::after { content: ""; display: block; clear: both; height: 3px; margin-top: 28px; border-top: 2px solid var(--paper); border-bottom: 1px solid rgba(247,244,238,.5); }
 
 /* ---------- STEP LEDGER (the 7 nav buttons, restyled) ---------- */
 #rail {
@@ -194,14 +215,14 @@ footer { display: none !important; }
 .rail-btn.step-done::before { color: var(--ink-faint); }
 
 /* ---------- EDITORIAL SECTION HEADS ---------- */
-.sec-head { display: grid; grid-template-columns: 168px 1fr; gap: 0; align-items: start; margin: 56px 0 26px; }
-.sec-index { font-family: var(--serif); font-size: 13px; color: var(--ink-faint); letter-spacing: .02em; padding-top: 9px; }
-.sec-index .rule-no { display: block; font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-ghost); margin-bottom: 4px; }
-.sec-title { font-family: var(--serif); font-optical-sizing: auto; font-weight: 420; font-size: 33px; line-height: 1.08; letter-spacing: -.02em; color: var(--ink); margin: 0; }
+.sec-head { display: grid; grid-template-columns: 140px 1fr; gap: 0; align-items: start; margin: 60px 0 28px; }
+.sec-index { font-family: var(--serif); font-optical-sizing: auto; font-size: 68px; font-weight: 380; color: var(--accent); line-height: .8; letter-spacing: -.015em; padding-top: 0; text-shadow: 0 1px 0 rgba(255,255,255,.5); }
+.sec-index .rule-no { display: block; font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 11px; }
+.sec-title { font-family: var(--serif); font-optical-sizing: auto; font-weight: 420; font-size: 36px; line-height: 1.06; letter-spacing: -.02em; color: var(--ink); margin: 0; }
 .sec-sub { margin-top: 9px; font-family: var(--read); font-size: 16px; line-height: 1.5; color: var(--ink-soft); max-width: 560px; }
 
 /* ---------- CONNECT FORM (Gradio inputs as editorial fields) ---------- */
-#adv-connect-panel { background: var(--paper-card) !important; border: 1px solid var(--rule) !important; border-radius: 10px !important; box-shadow: var(--shadow-card) !important; padding: 8px 12px !important; overflow: hidden; }
+#adv-connect-panel { background: var(--paper-card) !important; border: 1px solid var(--rule) !important; border-radius: 10px !important; box-shadow: var(--shadow-card), var(--sheen) !important; padding: 8px 12px !important; overflow: hidden; }
 #adv-connect-panel .block, #adv-connect-panel .form, #adv-connect-panel > .styler { background: transparent !important; border: none !important; box-shadow: none !important; }
 .adv-field, .adv-field > .styler, .adv-field .block, .adv-field .form { background: transparent !important; border: none !important; box-shadow: none !important; }
 .adv-field label > span, .adv-field span[data-testid="block-info"] { font-family: var(--sans) !important; font-size: 12px !important; font-weight: 600 !important; letter-spacing: .04em !important; color: var(--ink-soft) !important; margin-bottom: 8px !important; }
@@ -228,11 +249,11 @@ footer { display: none !important; }
 .measure > span { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 2px; transition: width .4s cubic-bezier(.2,.7,.2,1); }
 
 .roster { padding: 0; }
-.row { display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 22px; padding: 22px 4px; border-bottom: 1px solid var(--rule); transition: background .18s; }
+.row { display: grid; grid-template-columns: 36px 1fr auto; align-items: center; gap: 22px; padding: 22px 4px; border-bottom: 1px solid var(--rule); transition: background .18s; }
 .row:last-child { border-bottom: none; }
-.row .rank { font-family: var(--serif); font-size: 15px; font-weight: 420; color: var(--ink-ghost); font-feature-settings: "tnum" 1; text-align: right; }
+.row .rank { font-family: var(--serif); font-optical-sizing: auto; font-size: 22px; font-weight: 420; color: var(--ink-faint); text-align: right; }
 .row .body { min-width: 0; }
-.row .co { font-family: var(--serif); font-optical-sizing: auto; font-weight: 470; font-size: 22px; letter-spacing: -.018em; color: var(--ink); line-height: 1.12; }
+.row .co { font-family: var(--serif); font-optical-sizing: auto; font-weight: 470; font-size: 25px; letter-spacing: -.02em; color: var(--ink); line-height: 1.1; }
 .row .sector { font-family: var(--read); font-size: 15px; color: var(--ink-faint); margin-top: 2px; }
 .signals { display: flex; align-items: center; gap: 14px; margin-top: 11px; flex-wrap: wrap; }
 .sig { display: inline-flex; align-items: baseline; gap: 7px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; }
@@ -278,7 +299,7 @@ footer { display: none !important; }
 .draft-head .to { font-family: var(--read); font-size: 15px; color: var(--ink-soft); }
 .draft-head .to b { color: var(--ink); font-weight: 600; font-family: var(--sans); font-size: 14px; }
 .draft-head .editable { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; white-space: nowrap; }
-#adv-letter { background: var(--paper-card) !important; border: 1px solid var(--rule) !important; border-top: none !important; border-radius: 0 0 12px 12px !important; box-shadow: var(--shadow-lift) !important; }
+#adv-letter { background: var(--paper-card) !important; border: 1px solid var(--rule) !important; border-top: none !important; border-radius: 0 0 12px 12px !important; box-shadow: var(--shadow-lift), var(--sheen) !important; }
 #adv-letter textarea { background: transparent !important; border: none !important; box-shadow: none !important; font-family: var(--read) !important; font-size: 18px !important; line-height: 1.62 !important; color: var(--ink) !important; padding: 26px 32px !important; letter-spacing: -.003em; }
 #adv-letter textarea::placeholder { color: var(--ink-ghost) !important; font-style: italic; }
 .reassure { display: inline-flex; align-items: center; gap: 9px; font-family: var(--read); font-style: italic; font-size: 14px; color: var(--ink-soft); padding: 16px 2px 0; }
@@ -329,7 +350,12 @@ footer { display: none !important; }
   .sec-index { padding-top: 0; }
   .row { grid-template-columns: 24px 1fr; }
   .rate-cell { grid-column: 1 / -1; align-items: flex-start; margin-top: 10px; }
-  .wordmark { font-size: 32px; }
+  /* on mobile, don't full-bleed the cover band — keep it within the column, cleanly aligned */
+  #adv-masthead .masthead { margin: 0; padding: 28px 24px 24px; border-radius: 4px; }
+  .wordmark { font-size: 38px; }
+  .seal, .seal-svg { width: 60px; height: 60px; }
+  .nameplate-row { gap: 14px; }
+  .sec-index { font-size: 44px; }
   .sec-title { font-size: 27px; }
   /* the ledger scrolls horizontally on mobile — steps keep natural width, never collide */
   #rail > * { flex: 0 0 auto !important; }
@@ -340,4 +366,8 @@ footer { display: none !important; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }
+
+/* oldstyle figures + ligatures on the serif display type — numerals set like proper type.
+   Placed last so it overrides the earlier tabular (tnum) settings on these elements. */
+.wordmark, .sec-index, .sec-index .rule-no, .rail-btn::before, .ranked .mot, .row .rank { font-feature-settings: "onum" 1, "pnum" 1, "liga" 1, "calt" 1; }
 """
