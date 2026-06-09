@@ -1,3 +1,42 @@
+# Current Sprint — Agentic / AI-native + no-scroll redesign (2026-06-09)
+
+Direction (user-approved): **The Standing Advocate's Worklog** — the dark cover plate docks to a
+persistent ~64px agent header after step 0; the agent remembers targets, visibly works the grounded
+calls, annotates every name with *why* it surfaced, keeps an honest "On your behalf" chronicle.
+Never weakens draft-only. Scope: A + B + C + command line. Auto-advance on satisfied gates only.
+
+Grounded facts: `_nav_updates(target)` is the single nav chokepoint. Sourced records already carry
+`rationale` + `lenses` (pipeline.py:114-116) — receipts are pure-render. `_on_source`/`_on_prep` are
+generators (can yield seal states); `_on_draft` is blocking (convert to generator). Masthead ~340px.
+
+## Phase A — the shell + dock (layout only, zero pipeline change)
+- [ ] `_dock_html()` compact masthead (slim cover-ink bar: small seal + "Advocate" + brief/chronicle slots)
+- [ ] `_nav_updates` also returns the masthead update (full on step 0, dock on 1–6); add `masthead` to nav_outputs
+- [ ] CSS: `.mast-compact`/`.dock`; roster internal `overflow:auto` + max-height; tighten sec-head/colophon/container margins
+- [ ] Fix the horizontal scrollbar under the full-bleed cover band
+- [ ] Verify: each non-roster step fits viewport (no page scroll) at 1280 + 1440; roster scrolls internally; `/design-review`
+
+## Phase B — working seal + receipts (agentic core, existing data)
+- [ ] Seal `working`/`resting` on the 3 grounded calls (yields; `_on_draft`→generator); reduced-motion = static "At work"
+- [ ] Render `rationale` + `lenses` as a collapsible margin note per Rate row (blank when empty — seed mode)
+- [ ] Rate-10 gate hero beat: locked CTA → armed "Draft my note to {top} →" on the 10th rating
+- [ ] Approval as a visible draft-only countersign
+
+## Phase C — chronicle + memory + auto-advance
+- [ ] `chronicle` gr.State appended by handlers (real events only); render in dock tray + colophon
+- [ ] Remembered-brief: agent speaks targets back ("Watching for {function} in {industry}, around {geography}.")
+- [ ] Auto-advance on satisfied gates only (Source→Rate, Approve→3B7); never past a locked gate
+
+## Phase D — command line (highest risk, ship last)
+- [ ] Deterministic NL→param intent router; confirm-before-fire on any grounded re-run
+
+### Constraints (never break)
+draft-only is structural (no send path ever) · rate-10 gate · IAP/upload/parse_ratings hardening ·
+editorial letterpress language · Gradio in-process · immutable state · no AI-slop (no chat bubbles /
+sparkles / robot mascot / typing-dots / fake "thinking")
+
+---
+
 # TODO — Advocate Hackathon UI (Guided Sprint / Gradio)
 
 Plan: [tasks/plan.md](plan.md) · Budget ~36h · 🔴 demo-critical · 🟡 nice-to-have

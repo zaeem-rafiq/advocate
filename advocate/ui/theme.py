@@ -141,7 +141,7 @@ body, gradio-app, .gradio-container {
 .gradio-container {
   width: min(1040px, 100vw) !important;
   margin: 0 auto !important;
-  padding: 0 56px 110px !important;
+  padding: 0 56px 48px !important;
   overflow-x: hidden;
   color: var(--ink);
   font-family: var(--sans);
@@ -163,13 +163,13 @@ footer { display: none !important; }
 #ratings-json { display: none !important; }
 
 /* ---------- MASTHEAD (dark "cover plate", full column width) ---------- */
-#adv-masthead .masthead { margin: 0 -56px; padding: 46px 56px 34px; background: radial-gradient(135% 150% at 26% -32%, rgba(255,238,214,.07) 0%, transparent 58%), linear-gradient(168deg, #2b231b 0%, var(--cover-ink) 60%, #161009 100%); box-shadow: inset 0 1px 0 rgba(255,245,232,.10), inset 0 -1px 0 rgba(0,0,0,.35), 0 14px 30px -20px rgba(20,15,10,.55); }
+#adv-masthead .masthead { margin: 0 -56px; padding: 30px 56px 22px; background: radial-gradient(135% 150% at 26% -32%, rgba(255,238,214,.07) 0%, transparent 58%), linear-gradient(168deg, #2b231b 0%, var(--cover-ink) 60%, #161009 100%); box-shadow: inset 0 1px 0 rgba(255,245,232,.10), inset 0 -1px 0 rgba(0,0,0,.35), 0 14px 30px -20px rgba(20,15,10,.55); }
 /* a dateline band, ruled top + bottom in cream hairlines, tracked small caps */
 .dateline { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 11px 2px; border-top: 1px solid rgba(247,244,238,.30); border-bottom: 1px solid rgba(247,244,238,.30); font-family: var(--sans); font-size: 11px; font-weight: 600; letter-spacing: .17em; text-transform: uppercase; }
 .dateline span { color: rgba(247,244,238,.66); }
 .dateline .fleuron { color: var(--accent-bright); font-family: var(--serif); font-size: 21px; letter-spacing: 0; line-height: 1; }
 /* the nameplate — plain inline text (no flex), so the leading A never blockifies/displaces */
-.nameplate-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin: 22px 0 0; }
+.nameplate-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin: 14px 0 0; }
 .wordmark { font-family: var(--serif); font-optical-sizing: auto; font-weight: 450; font-size: clamp(48px, 7vw, 80px); letter-spacing: -.03em; color: var(--paper); line-height: .96; margin: 0; white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,.4); }
 .wordmark::first-letter { font-weight: 540; }
 .wordmark .dot { color: var(--accent-bright); font-weight: 540; }
@@ -181,11 +181,24 @@ footer { display: none !important; }
 .seal-ring { fill: var(--paper); font-family: var(--sans); font-size: 6.5px; font-weight: 600; letter-spacing: 1.45px; }
 .seal-mono { fill: var(--paper); font-family: var(--serif); font-optical-sizing: auto; font-size: 40px; font-weight: 500; }
 .seal-fleuron { fill: var(--paper); font-family: var(--serif); font-size: 9px; }
-.tagline { margin: 18px 0 0; font-family: var(--read); font-size: 19px; line-height: 1.5; color: rgba(247,244,238,.82); max-width: 605px; }
+.tagline { margin: 12px 0 0; font-family: var(--read); font-size: 18px; line-height: 1.45; color: rgba(247,244,238,.82); max-width: 605px; }
 .tagline em { color: var(--accent-bright); font-style: italic; }
 .tagline .dropcap { float: left; font-family: var(--serif); font-optical-sizing: auto; font-weight: 430; font-size: 58px; line-height: .78; padding: 6px 11px 0 0; color: var(--accent-bright); text-shadow: 0 1px 2px rgba(0,0,0,.35); }
 /* a cream thick + thin double rule closes the cover plate, cleared past the drop cap float */
-#adv-masthead .masthead::after { content: ""; display: block; clear: both; height: 3px; margin-top: 28px; border-top: 2px solid var(--paper); border-bottom: 1px solid rgba(247,244,238,.5); }
+#adv-masthead .masthead::after { content: ""; display: block; clear: both; height: 3px; margin-top: 16px; border-top: 2px solid var(--paper); border-bottom: 1px solid rgba(247,244,238,.5); }
+
+/* ---------- DOCK — the cover plate compacted to a standing-agent header (steps 1–6) ---------- */
+#adv-masthead .masthead.mast-compact { margin: 0 -56px; padding: 0 56px; background: linear-gradient(168deg, #271f19 0%, var(--cover-ink) 70%, #161009 100%); box-shadow: inset 0 -1px 0 rgba(0,0,0,.4), 0 10px 24px -18px rgba(20,15,10,.5); }
+#adv-masthead .masthead.mast-compact::after { display: none; }
+.dock { display: flex; align-items: center; gap: 16px; min-height: 64px; padding: 11px 0; }
+.dock-seal { width: 42px; height: 42px; flex: 0 0 auto; filter: drop-shadow(0 2px 5px rgba(0,0,0,.4)); }
+.dock-seal .seal-svg { width: 42px; height: 42px; }
+.dock-seal .seal-ring { display: none; }   /* ring micro-type is illegible at 42px — disc + monogram only */
+.dock-id { display: flex; align-items: baseline; gap: 14px; min-width: 0; }
+.dock-name { font-family: var(--serif); font-optical-sizing: auto; font-weight: 480; font-size: 22px; letter-spacing: -.02em; color: var(--paper); line-height: 1; }
+.dock-name .dot { color: var(--accent-bright); }
+.dock-brief { font-family: var(--read); font-style: italic; font-size: 13.5px; color: rgba(247,244,238,.64); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dock-chron { margin-left: auto; flex: 0 0 auto; font-family: var(--sans); font-size: 10.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: rgba(247,244,238,.55); }
 
 /* ---------- STEP LEDGER (the 7 nav buttons, restyled) ---------- */
 #rail {
@@ -215,14 +228,19 @@ footer { display: none !important; }
 .rail-btn.step-done::before { color: var(--ink-faint); }
 
 /* ---------- EDITORIAL SECTION HEADS ---------- */
-.sec-head { display: grid; grid-template-columns: 140px 1fr; gap: 0; align-items: start; margin: 60px 0 28px; }
+.sec-head { display: grid; grid-template-columns: 140px 1fr; gap: 0; align-items: start; margin: 30px 0 22px; }
 .sec-index { font-family: var(--serif); font-optical-sizing: auto; font-size: 68px; font-weight: 380; color: var(--accent); line-height: .8; letter-spacing: -.015em; padding-top: 0; text-shadow: 0 1px 0 rgba(255,255,255,.5); }
 .sec-index .rule-no { display: block; font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 11px; }
 .sec-title { font-family: var(--serif); font-optical-sizing: auto; font-weight: 420; font-size: 36px; line-height: 1.06; letter-spacing: -.02em; color: var(--ink); margin: 0; }
 .sec-sub { margin-top: 9px; font-family: var(--read); font-size: 16px; line-height: 1.5; color: var(--ink-soft); max-width: 560px; }
 
-/* ---------- CONNECT FORM (Gradio inputs as editorial fields) ---------- */
-#adv-connect-panel { background: var(--paper-card) !important; border: 1px solid var(--rule) !important; border-radius: 10px !important; box-shadow: var(--shadow-card), var(--sheen) !important; padding: 8px 12px !important; overflow: hidden; }
+/* ---------- CONNECT = the cover's "brief": a slim prompt + a 2×2 field grid ---------- */
+.brief-prompt { font-family: var(--read); font-size: 16px; color: var(--ink-soft); margin: 20px 0 14px; }
+.brief-prompt .bp-eyebrow { font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; color: var(--accent); margin-right: 14px; }
+/* Gradio's gr.Row is display:grid — set explicit equal columns for a true side-by-side 2×2 */
+#adv-connect-panel .brief-row { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 28px !important; }
+#adv-connect-panel .brief-row > * { min-width: 0 !important; }
+#adv-connect-panel { background: var(--paper-card) !important; border: 1px solid var(--rule) !important; border-radius: 10px !important; box-shadow: var(--shadow-card), var(--sheen) !important; padding: 8px 18px !important; overflow: hidden; }
 #adv-connect-panel .block, #adv-connect-panel .form, #adv-connect-panel > .styler { background: transparent !important; border: none !important; box-shadow: none !important; }
 .adv-field, .adv-field > .styler, .adv-field .block, .adv-field .form { background: transparent !important; border: none !important; box-shadow: none !important; }
 .adv-field label > span, .adv-field span[data-testid="block-info"] { font-family: var(--sans) !important; font-size: 12px !important; font-weight: 600 !important; letter-spacing: .04em !important; color: var(--ink-soft) !important; margin-bottom: 8px !important; }
@@ -234,7 +252,10 @@ footer { display: none !important; }
 }
 .adv-field input::placeholder, .adv-field textarea::placeholder { color: var(--ink-ghost) !important; font-style: italic; }
 .adv-field input:focus, .adv-field textarea:focus { border-bottom-color: var(--accent) !important; outline: none !important; }
-#adv-upload { background: var(--paper-sunk) !important; border: none !important; border-top: 1px solid var(--rule) !important; border-radius: 0 0 10px 10px !important; }
+#adv-upload { background: var(--paper-sunk) !important; border: none !important; border-top: 1px solid var(--rule) !important; border-radius: 0 0 10px 10px !important; min-height: 0 !important; }
+/* compact the dropzone to a slim ROW bar — the CSV is optional, it shouldn't eat 240px of the cover page */
+#adv-upload .wrap { min-height: 0 !important; padding: 9px 14px !important; flex-direction: row !important; align-items: center !important; justify-content: flex-start !important; gap: 10px !important; font-size: 13px !important; }
+#adv-upload .wrap > svg, #adv-upload .icon-wrap, #adv-upload .wrap .icon-wrap svg { width: 18px !important; height: 18px !important; }
 #adv-upload .wrap, #adv-upload label { font-family: var(--read) !important; color: var(--ink-faint) !important; }
 
 /* ---------- RATE — the hero roster ---------- */
@@ -249,6 +270,11 @@ footer { display: none !important; }
 .measure > span { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 2px; transition: width .4s cubic-bezier(.2,.7,.2,1); }
 
 .roster { padding: 0; }
+/* the ~40-row Rate roster scrolls INTERNALLY so the page itself never scrolls (no-scroll shell);
+   the progress masthead + dock stay pinned above it. Rank's 5-row list is short, so it's unscoped. */
+#adv-rate .roster { max-height: calc(100vh - 358px); overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--rule-strong) transparent; padding-right: 6px; -webkit-overflow-scrolling: touch; }
+#adv-rate .roster::-webkit-scrollbar { width: 7px; }
+#adv-rate .roster::-webkit-scrollbar-thumb { background: var(--rule-strong); border-radius: 4px; }
 .row { display: grid; grid-template-columns: 36px 1fr auto; align-items: center; gap: 22px; padding: 22px 4px; border-bottom: 1px solid var(--rule); transition: background .18s; }
 .row:last-child { border-bottom: none; }
 .row .rank { font-family: var(--serif); font-optical-sizing: auto; font-size: 22px; font-weight: 420; color: var(--ink-faint); text-align: right; }
@@ -338,7 +364,7 @@ footer { display: none !important; }
 .adv-status b, .adv-status strong { color: var(--ink) !important; font-family: var(--sans) !important; }
 
 /* ---------- COLOPHON ---------- */
-#adv-colophon .colophon { margin-top: 72px; padding-top: 22px; border-top: 1.5px solid var(--ink); display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; color: var(--ink-faint); letter-spacing: .02em; }
+#adv-colophon .colophon { margin-top: 22px; padding-top: 14px; border-top: 1.5px solid var(--ink); display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; color: var(--ink-faint); letter-spacing: .02em; }
 .colophon .mark { font-family: var(--serif); font-weight: 500; color: var(--ink-soft); }
 .colophon .mark .dot { color: var(--accent); }
 

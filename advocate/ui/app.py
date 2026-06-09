@@ -121,6 +121,24 @@ def _masthead_html() -> str:
     )
 
 
+def _dock_html(brief: str = "", chronicle_count: int = 0) -> str:
+    """The cover plate, docked: a slim persistent "standing agent" header for steps 1–6.
+
+    Reclaims the vertical the full cover plate eats (≈276px) so each step fits the viewport, and
+    is the vessel for the agent's presence — the remembered-brief and chronicle slots fill in later
+    phases (blank here). Rendered by `_nav_updates` when the target step is not Connect.
+    """
+    brief_html = f'<span class="dock-brief">{_esc(brief)}</span>' if brief else ""
+    chron_html = (f'<span class="dock-chron">{int(chronicle_count)} on your behalf</span>'
+                  if chronicle_count else "")
+    return (
+        '<header class="masthead mast-compact"><div class="dock">'
+        f'<div class="dock-seal">{_seal_svg()}</div>'
+        '<div class="dock-id"><span class="dock-name">Advocate<span class="dot">.</span></span>'
+        f'{brief_html}</div>{chron_html}</div></header>'
+    )
+
+
 def _sec_head(rule_no: str, num: str, title: str, sub: str) -> str:
     return (
         f'<div class="sec-head"><div class="sec-index"><span class="rule-no">{_esc(rule_no)}</span>{_esc(num)}</div>'
@@ -243,13 +261,13 @@ def _draft_note(text: str) -> str:
 
 def _colophon_html() -> str:
     return (
-        '<div class="colophon"><div class="mark"><span class="glyph-a">A</span>dvocate<span class="dot">.</span></div>'
+        '<div class="colophon"><div class="mark">Advocate<span class="dot">.</span></div>'
         '<div>A guided sprint, after Steve Dalton’s method · You stay in the driver’s seat</div></div>'
     )
 
 
 def _nav_updates(target: int) -> list:
-    """Updates for all step-panel visibilities + rail-button state (current vs done) + step."""
+    """Panel visibilities + rail-button state + step + the masthead (full on Connect, docked after)."""
     group_updates = [gr.update(visible=v) for v in visibility_for(target)]
     button_updates = []
     for i in range(NUM_STEPS):
@@ -259,7 +277,8 @@ def _nav_updates(target: int) -> list:
             button_updates.append(gr.update(variant="secondary", elem_classes=["rail-btn", "step-done"]))
         else:
             button_updates.append(gr.update(variant="secondary", elem_classes=["rail-btn"]))
-    return group_updates + button_updates + [target]
+    mast = gr.update(value=_masthead_html() if target == 0 else _dock_html())
+    return group_updates + button_updates + [target, mast]
 
 
 def _ranked_motivations(ranked: list) -> dict:
@@ -431,7 +450,7 @@ def build_app() -> gr.Blocks:
         ranked_state = gr.State([])    # ranked Active-Five (carries motivation); read by _on_draft
         meta_state = gr.State({})      # {company, contact} for the approved outreach
 
-        gr.HTML(_masthead_html(), elem_id="adv-masthead")
+        masthead = gr.HTML(_masthead_html(), elem_id="adv-masthead")
 
         rail_buttons: list[gr.Button] = []
         with gr.Row(elem_id="rail"):
@@ -444,21 +463,30 @@ def build_app() -> gr.Blocks:
         groups: list[gr.Group] = []
 
         # --- Step 0: Connect ---
+        # Step 0 is the COVER: the full plate above + a compact 2×2 "brief" (no tall form), so the
+        # whole landing fits one viewport. The cover's tagline replaces the section header here.
         with gr.Group(visible=True, elem_classes=["adv-bare"]) as g0:
-            gr.HTML(_sec_head("Step One", "01", "Tell us where you’re pointed.",
-                              "Four lines set the whole sprint. The sharper your aim, the better the "
-                              "employers we surface for you to rate."))
+            gr.HTML('<div class="brief-prompt"><span class="bp-eyebrow">Your brief</span>'
+                    'Set your aim — four lines, and the Advocate goes to work.</div>')
             with gr.Group(elem_id="adv-connect-panel"):
-                industry_in = gr.Textbox(label="Target industry / sector", placeholder="e.g. climate & clean energy",
-                                         max_lines=1, elem_classes=["adv-field"])
-                geography_in = gr.Textbox(label="Target geography", placeholder="e.g. New York & remote (US)",
-                                          max_lines=1, elem_classes=["adv-field"])
-                function_in = gr.Textbox(label="Target function / role", placeholder="e.g. product management",
-                                         max_lines=1, elem_classes=["adv-field"])
-                background_in = gr.Textbox(label="One line about you",
-                                           placeholder="e.g. a Columbia MBA moving from consulting into climate product",
-                                           max_lines=1, elem_classes=["adv-field"])
-                alumni_csv = gr.File(label="Bring your alumni network — upload a CSV (optional; seeded data backs the demo)",
+                # Each field in its own Column so Gradio doesn't merge consecutive Textboxes into one
+                # stacked `.form` — this gives a true side-by-side 2×2 brief (half the height).
+                with gr.Row(elem_classes=["brief-row"]):
+                    with gr.Column(min_width=200):
+                        industry_in = gr.Textbox(label="Target industry / sector", placeholder="e.g. climate & clean energy",
+                                                 max_lines=1, elem_classes=["adv-field"])
+                    with gr.Column(min_width=200):
+                        geography_in = gr.Textbox(label="Target geography", placeholder="e.g. New York & remote (US)",
+                                                  max_lines=1, elem_classes=["adv-field"])
+                with gr.Row(elem_classes=["brief-row"]):
+                    with gr.Column(min_width=200):
+                        function_in = gr.Textbox(label="Target function / role", placeholder="e.g. product management",
+                                                 max_lines=1, elem_classes=["adv-field"])
+                    with gr.Column(min_width=200):
+                        background_in = gr.Textbox(label="One line about you",
+                                                   placeholder="e.g. a Columbia MBA from consulting into climate product",
+                                                   max_lines=1, elem_classes=["adv-field"])
+                alumni_csv = gr.File(label="Bring your alumni network — a CSV (optional; seeded data backs the demo)",
                                      file_types=[".csv"], elem_id="adv-upload")
             connect_status = gr.Markdown("", elem_classes=["adv-status"])
         groups.append(g0)
@@ -541,7 +569,7 @@ def build_app() -> gr.Blocks:
         # ----- wiring (handlers are module-level for testability) -----
         alumni_csv.change(_on_connect, inputs=[alumni_csv], outputs=[connect_status])
 
-        nav_outputs = groups + rail_buttons + [step]
+        nav_outputs = groups + rail_buttons + [step, masthead]
         for i, button in enumerate(rail_buttons):
             button.click(fn=functools.partial(_nav_updates, i), outputs=nav_outputs)
 
