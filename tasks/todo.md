@@ -28,8 +28,31 @@ generators (can yield seal states); `_on_draft` is blocking (convert to generato
 - [x] Auto-advance on satisfied gates only — Source→Rate (`.then(_advance_if_sourced)`, iff employers landed), Approve→3B7 (`.then(_advance_if_approved)`, iff countersigned); never past a locked gate
 - [x] **Fixed a pre-existing no-scroll bug surfaced by the ledger:** Rate's roster reserved `calc(100vh - 358px)` but the non-roster column is ~720px, so Rate overflowed ~310px at every height (Phase A's claim didn't hold). Recalibrated to `calc(100vh - 720px)`; measured `overflowBy: 0` at 1204px, roster scrolls internally. Ledger capped (`max-height` + `_CHRONICLE_CAP=12`) so growth never re-overflows.
 
-## Phase D — command line (highest risk, ship last)
-- [ ] Deterministic NL→param intent router; confirm-before-fire on any grounded re-run
+## Phase D — command line (highest risk, ship last) ✅ complete
+- [x] Deterministic NL→intent router (`advocate/ui/command.py`, pure/stdlib, 23 tests) — navigate · set-brief · prep · draft · help; bare-verb navigates, verb+object acts
+- [x] **Confirm-before-fire (stronger than asked):** the router NEVER fires a grounded call — it navigates + prefills; the user clicks the step's own CTA to spend. A typed command can't silently run a grounded search/draft/prep.
+- [x] Persistent editorial command bar (`#adv-cmd`, "›" oxblood prompt) under the rail; status hard-bounded to 38px so it can't break no-scroll; reserve re-tuned to `calc(100vh - 845px)` (measured overflowBy:0 at 1204px, incl. the help case). `/design-review`: PASS (+ oxblood focus ring).
+
+### Review — Phase D: the command line (2026-06-09)
+- **What changed:** A persistent NL command line steers the sprint. New pure module `advocate/ui/command.py`
+  (`parse_command` — deterministic keyword/preposition slot-extraction, NOT an LLM) + `_on_command` router in
+  app.py. Intents: navigate (bare step word or "go to …"), set-brief ("find {role} in {industry} near {place}"),
+  prep/draft ("prep {co}" / "draft to {name}"), help, unknown, noop. Editorial command bar with a "›" prompt.
+- **The safety property:** the router NEVER fires a grounded (cost-bearing) call. It navigates + prefills only;
+  the user clicks the step's own CTA to spend — that click *is* the confirm-before-fire. So a typed command can't
+  silently run a grounded search/draft/prep, and it can't bypass the rate-10 gate (Draft re-checks it) or the
+  draft-only guarantee (no send path exists anywhere).
+- **Verification:** 354 passed / 1 skipped (+29: 23 parser + 6 router). **Live (plugin-playwright, 1204px):**
+  typed "find product management in climate near NYC" → routed to Source with the brief prefilled → clicked Find →
+  sourced (dock brief built from the command's values) → auto-advanced to Rate; "help" rendered the grammar; the
+  no-scroll invariant held (`overflowBy: 0`) even with the help status showing. `/design-review`: PASS.
+- **Issues found + fixed:** the command bar (esp. its status text) re-broke no-scroll — root-caused by measuring
+  (bar adds ~125px; multi-paragraph help defeated `-webkit-line-clamp`). Fixed: terse single-line help, hard
+  `max-height: 38px` status cap, reserve `calc(100vh - 845px)`; strengthened the focus ring for WCAG 2.4.7.
+- **Known follow-up (non-blocking):** the command input has a placeholder but no programmatic label (Gradio
+  `show_label=False`) — a visually-hidden label would help screen readers.
+- **Next:** the agentic redesign (Phases A–D) is complete. Deploy B+C+D, then optional polish (command-status
+  auto-clear on nav; the brief-truncation short form).
 
 ### Review — Phase C: the worklog (2026-06-09)
 - **What changed:** A single immutable `worklog_state` ({brief, chronicle}) threaded through every dock-rendering

@@ -25,6 +25,7 @@ from datetime import date
 import gradio as gr
 
 from advocate.ui import pipeline
+from advocate.ui.command import command_help, parse_command
 from advocate.ui.steps import NUM_STEPS, STEPS, visibility_for
 from advocate.ui.theme import ADVOCATE_CSS, ADVOCATE_HEAD, ADVOCATE_JS, advocate_theme
 
@@ -363,6 +364,57 @@ def _advance_if_approved(meta: dict, worklog: dict | None = None) -> list:
     return _nav_updates(5 if meta else 4, worklog)
 
 
+def _on_command(text, current_step=0, worklog=None):
+    """Route a typed command (Phase D). DETERMINISTIC — see advocate/ui/command.py.
+
+    Critically, this NEVER fires a grounded (cost-bearing) call. It only navigates and prefills:
+    a `source` intent fills the brief and routes to Source; `prep`/`draft` set the company and
+    route to that step. The user then clicks the step's own CTA to actually spend — that click is
+    the confirm-before-fire, so a typed command can't silently run a grounded search/draft/prep.
+
+    Fixed output order (matches the wiring):
+      [command_in(clear), command_status, industry, geography, function, outreach_co, prep_co] + nav
+    where nav = _nav_updates(target, worklog) = groups + rail buttons + [step, masthead].
+    """
+    intent = parse_command(text)
+    kind = intent["kind"]
+    # extra outputs default to no-op; only the relevant intent touches them
+    status = ""
+    industry = geography = function = gr.update()
+    outreach_co = prep_co = gr.update()
+    target = int(current_step or 0)  # default: stay on the current step (re-asserted, no visible jump)
+
+    if kind == "help":
+        status = command_help()
+    elif kind == "noop":
+        status = ""
+    elif kind == "nav":
+        target = intent["step"]
+        status = f"→ **{STEPS[target].title}**."
+    elif kind == "source":
+        industry = gr.update(value=intent["industry"])
+        geography = gr.update(value=intent["geography"])
+        function = gr.update(value=intent["function"])
+        target = 1
+        bits = " · ".join(p for p in (intent["function"], intent["industry"], intent["geography"]) if p)
+        status = f"Brief set: **{bits or '…'}** — click **Find target employers** to run it (you spend, not me)."
+    elif kind == "prep":
+        prep_co = gr.update(value=intent["company"])
+        target = 6
+        status = f"Ready to prep **{intent['company']}** — click **Prepare TIARA questions**."
+    elif kind == "draft":
+        outreach_co = gr.update(value=intent["company"])
+        target = 4
+        status = (f"Pick **{intent['company']}** in your Active Five and click **Draft** — "
+                  "you approve; nothing is ever sent for you.")
+    else:  # unknown
+        status = ("I didn’t catch that. Try **rate**, **find product management in climate near NYC**, "
+                  "**prep Patagonia**, or **help**.")
+
+    nav = _nav_updates(target, worklog)
+    return tuple([gr.update(value=""), status, industry, geography, function, outreach_co, prep_co] + nav)
+
+
 def _ranked_motivations(ranked: list) -> dict:
     """Map company -> motivation from the ranked records (each carries its own motivation)."""
     return {o["company"]: o.get("motivation") for o in (ranked or [])}
@@ -597,6 +649,15 @@ def build_app() -> gr.Blocks:
                               size="sm", elem_classes=(["rail-btn", "primary"] if i == 0 else ["rail-btn"]))
                 )
 
+        # The command line (Phase D): a persistent NL prompt that steers the sprint. Deterministic
+        # router; it only navigates + prefills — the user clicks a step CTA to spend (confirm-before-fire).
+        with gr.Group(elem_id="adv-cmd"):
+            command_in = gr.Textbox(
+                show_label=False, max_lines=1, elem_id="adv-cmd-input", elem_classes=["adv-field"],
+                placeholder="Tell the Advocate — “find product management in climate near NYC”, "
+                            "“prep Patagonia”, “go rate”, or “help”")
+            command_status = gr.Markdown("", elem_classes=["adv-status", "cmd-status"])
+
         groups: list[gr.Group] = []
 
         # --- Step 0: Connect ---
@@ -715,6 +776,12 @@ def build_app() -> gr.Blocks:
             # worklog_state in → the docked masthead keeps the remembered brief + chronicle count on every step.
             button.click(fn=functools.partial(_nav_updates, i), inputs=[worklog_state],
                          outputs=nav_outputs, show_progress="hidden")
+
+        # Command line (Phase D): Enter routes the typed command. Outputs match _on_command's fixed
+        # order — it navigates + prefills only; the step CTAs remain the sole grounded-fire trigger.
+        command_in.submit(_on_command, inputs=[command_in, step, worklog_state],
+                          outputs=[command_in, command_status, industry_in, geography_in, function_in,
+                                   outreach_company, prep_company] + nav_outputs, show_progress="hidden")
 
         # Source: streams roster + worklog (brief/chronicle), then auto-advances to Rate iff employers landed.
         source_btn.click(_on_source, inputs=[industry_in, geography_in, function_in, worklog_state],

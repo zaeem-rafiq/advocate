@@ -285,10 +285,10 @@ footer { display: none !important; }
 .roster { padding: 0; }
 /* the ~40-row Rate roster scrolls INTERNALLY so the page itself never scrolls (no-scroll shell);
    the progress masthead + dock stay pinned above it. Rank's 5-row list is short, so it's unscoped. */
-/* Reserve enough for the full non-roster column (masthead + rail + sec-head + progress + rank CTA +
-   the colophon/ledger) so the page itself never scrolls — only the roster does, internally. Measured:
-   the non-roster content is ~720px, so calc(100vh - 358px) under-reserved and Rate overflowed. */
-#adv-rate .roster { max-height: calc(100vh - 720px); min-height: 200px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--rule-strong) transparent; padding-right: 6px; -webkit-overflow-scrolling: touch; }
+/* Reserve enough for the full non-roster column (masthead + rail + command line + sec-head +
+   progress + rank CTA + the colophon/ledger) so the page itself never scrolls — only the roster
+   does, internally. Measured: non-roster content is ~775px (incl. the Phase-D command bar). */
+#adv-rate .roster { max-height: calc(100vh - 845px); min-height: 200px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--rule-strong) transparent; padding-right: 6px; -webkit-overflow-scrolling: touch; }
 #adv-rate .roster::-webkit-scrollbar { width: 7px; }
 #adv-rate .roster::-webkit-scrollbar-thumb { background: var(--rule-strong); border-radius: 4px; }
 .row { display: grid; grid-template-columns: 36px 1fr auto; align-items: center; gap: 22px; padding: 22px 4px; border-bottom: 1px solid var(--rule); transition: background .18s; }
@@ -382,6 +382,20 @@ footer { display: none !important; }
 /* status / markdown copy */
 .adv-status p, .adv-status { font-family: var(--read) !important; color: var(--ink-soft) !important; font-size: 15px !important; }
 .adv-status b, .adv-status strong { color: var(--ink) !important; font-family: var(--sans) !important; }
+
+/* ---------- COMMAND LINE (Phase D) ---------- */
+#adv-cmd { margin: 12px 0 4px !important; gap: 4px !important; border: none !important; background: transparent !important; }
+#adv-cmd-input { position: relative; }
+#adv-cmd-input::before { content: "\203A"; position: absolute; left: 14px; top: 21px; z-index: 3; font-family: var(--serif); font-size: 17px; line-height: 1; color: var(--accent); pointer-events: none; }
+#adv-cmd-input textarea, #adv-cmd-input input { font-family: var(--sans) !important; font-size: 13.5px !important; color: var(--ink) !important; background: var(--paper-card) !important; border: 1px solid var(--rule-strong) !important; border-radius: 8px !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.5) !important; padding: 9px 14px 9px 32px !important; min-height: 0 !important; transition: border-color .2s !important; }
+#adv-cmd-input textarea:focus, #adv-cmd-input input:focus { border-color: var(--accent) !important; box-shadow: 0 0 0 3px rgba(154,43,30,.18) !important; outline: none !important; }
+#adv-cmd-input textarea::placeholder, #adv-cmd-input input::placeholder { color: var(--ink-ghost) !important; font-style: italic; }
+/* Bound the status to ~2 lines so a long reply (e.g. help) can't push a viewport-tight step past
+   the fold. max-height is the hard guard (works across Gradio's <p> wrapper); the line-clamp on the
+   inner paragraph keeps the truncation clean rather than cutting mid-line. */
+.cmd-status { font-family: var(--read) !important; font-size: 13px !important; line-height: 1.4 !important; color: var(--ink-soft) !important; min-height: 0 !important; padding: 0 2px !important; max-height: 38px !important; overflow: hidden !important; }
+.cmd-status p { margin: 0 !important; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cmd-status:empty { display: none !important; }
 
 /* ---------- COLOPHON + the "on your behalf" ledger ---------- */
 #adv-colophon .colophon { margin-top: 22px; padding-top: 14px; border-top: 1.5px solid var(--ink); display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; color: var(--ink-faint); letter-spacing: .02em; }

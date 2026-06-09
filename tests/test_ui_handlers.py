@@ -376,3 +376,52 @@ def test_on_prep_logs_a_real_interview_event(monkeypatch):
     assert final_worklog["chronicle"] == ["Prepared an interview brief for Acme."]
     assert final_worklog["brief"] == "b"  # prep preserves the remembered brief
     assert "Prepared an interview brief for Acme." in final_colophon
+
+
+# ===== Phase D: the command line (deterministic router; NEVER fires a grounded call) =====
+# _on_command returns [cmd_clear, status, industry, geography, function, outreach_co, prep_co] + nav,
+# where nav = groups(7) + rail(7) + [step, masthead]. So out[-2] is the step target, out[2:5] the brief.
+
+def _wl():
+    return {"brief": "", "chronicle": []}
+
+
+def test_on_command_navigates_and_clears_the_input():
+    out = app._on_command("go to rate", 0, _wl())
+    assert out[-2] == 2                      # routed to Rate (step 2)
+    assert out[0].get("value") == ""         # the command input is cleared after running
+    assert "Rate" in out[1]                  # status confirms the destination
+
+
+def test_on_command_source_prefills_brief_and_routes_without_firing_grounded():
+    out = app._on_command("find product management in climate near NYC", 0, _wl())
+    assert out[-2] == 1                                   # routes to Source (does NOT run it)
+    assert out[2].get("value") == "climate"              # industry prefilled
+    assert out[3].get("value") == "NYC"                  # geography prefilled
+    assert out[4].get("value") == "product management"   # function prefilled
+    # the status makes the confirm-before-fire explicit: the USER clicks to spend
+    assert "Find target employers" in out[1] and "you spend" in out[1].lower()
+
+
+def test_on_command_prep_sets_company_and_routes_to_prep():
+    out = app._on_command("prep Patagonia", 2, _wl())
+    assert out[-2] == 6 and out[6].get("value") == "Patagonia"
+    assert "Prepare TIARA questions" in out[1]
+
+
+def test_on_command_draft_sets_company_routes_and_restates_no_send():
+    out = app._on_command("draft to Maya", 3, _wl())
+    assert out[-2] == 4 and out[5].get("value") == "Maya"
+    assert "sent" in out[1].lower()  # restates the draft-only / no-send guarantee
+
+
+def test_on_command_help_and_unknown_hold_the_current_step():
+    h = app._on_command("help", 2, _wl())
+    assert h[-2] == 2 and "navigate" in h[1].lower()  # help doesn't move you
+    u = app._on_command("make me a sandwich", 3, _wl())
+    assert u[-2] == 3 and "catch" in u[1].lower()     # unknown holds position + offers examples
+
+
+def test_on_command_noop_is_silent_and_holds_position():
+    out = app._on_command("   ", 4, _wl())
+    assert out[-2] == 4 and out[1] == ""              # blank input → no status, no move

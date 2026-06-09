@@ -56,3 +56,17 @@
   shipped system is a contract with the code, not a greenfield wishlist — reconcile to the
   build first, propose changes second. (Generalizes the existing "Compiling ≠ done / trace
   end-to-end" and "grep all call sites before changing a contract" anti-patterns to docs.)
+
+## 2026-06-09 — UI/no-scroll: "fits the viewport" is a MEASUREMENT, not a glance
+- **What went wrong:** Phase A claimed the Rate step "fits viewport / roster scrolls internally," but
+  the roster reserved `calc(100vh - 358px)` while the real non-roster column is ~720px — so Rate
+  overflowed the page by ~310px at EVERY viewport height (the overflow is viewport-independent: it's
+  `X - reserve` where X is fixed content). A visual Chrome glance on a tall screen missed it.
+- **What to do instead:** Verify any "no page scroll" claim by MEASURING in the browser at the target
+  viewport: `document.documentElement.scrollHeight - window.innerHeight` (should be ≤ 0), and confirm the
+  intended inner element scrolls (`el.scrollHeight > el.clientHeight`). For a `calc(100vh - Npx)` reserve,
+  N must equal the summed height of every non-scrolling sibling (masthead + rail + sec-head + CTA +
+  colophon + margins) — derive N from measured block heights, don't guess it.
+- **Bonus:** when adding an always-visible element (e.g. a colophon ledger) near a viewport-tight step,
+  re-measure scroll — and CAP the new element's height (max-height + overflow) so later growth can't
+  silently re-introduce the scroll.

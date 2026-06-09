@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-06-09 — Phase D: the command line (deterministic NL router; agentic redesign complete)
+
+A persistent natural-language command line steers the sprint — the last piece of the agentic redesign.
+New module `advocate/ui/command.py` (pure, stdlib), `_on_command` router + command bar in app.py. No
+agent/pipeline behavior, draft-only guarantee, rate-10 gate, or IAP hardening changed. Files:
+`advocate/ui/{command.py,app.py,theme.py}`, `tests/{test_command.py,test_ui_handlers.py}`.
+
+- **Deterministic router — not an LLM.** Keyword/preposition slot-extraction maps a typed command to an
+  intent: navigate (`rate`, `go to source`), set-brief (`find product management in climate near NYC`),
+  `prep Patagonia`, `draft to Maya`, `help`. A bare verb navigates; a verb + object acts. Instant, free,
+  same-input→same-output.
+- **Confirm-before-fire, structurally.** The router NEVER fires a grounded (cost-bearing) call — it
+  navigates and *prefills*; the user clicks the step's own CTA to spend. So a typed command can't silently
+  run a grounded search/draft/prep, can't bypass the rate-10 gate, and can't send anything.
+- **Editorial command bar.** A persistent input under the rail with a "›" oxblood prompt and a terse status
+  line (hard-capped to 38px so a long reply can't break the no-scroll invariant). Not a chat box.
+- **No-scroll preserved.** The bar adds ~125px; the Rate roster reserve was re-tuned to `calc(100vh - 845px)`
+  — measured `overflowBy: 0` at 1204px, including the help-status case. Oxblood focus ring (WCAG 2.4.7).
+- **Tests:** 354 passed / 1 skipped (+23 parser, +6 router). `/design-review`: PASS. Live-verified end-to-end
+  (plugin-playwright, seed): command → prefill → Find → source → auto-advance to Rate.
+
 ## 2026-06-09 — Phase C: the standing agent's worklog (remembered brief, chronicle, auto-advance)
 
 The "standing Advocate" now has memory and momentum. A single immutable `worklog_state` ({brief, chronicle})
