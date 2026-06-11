@@ -43,13 +43,13 @@ services — a deliberate, cost-driven choice (see `docs/DECISIONS.md`).
 
 ## Architecture
 See `docs/ARCHITECTURE.md` (diagram + layering). Tests: `uv run --no-project pytest`
-(98 unit tests; pure-code core ~100% covered).
+(354 passed, 1 skipped; pure-code core ~100% covered).
 
 ## Links
-- **Repo:** https://github.com/zaeem-rafiq/advocate (private for review — flip to public before submitting)
+- **Repo:** https://github.com/zaeem-rafiq/advocate (public)
 - **Demo video (1–2 min):** <VIDEO_URL — to be recorded; script in docs/DEMO_SCRIPT.md>
 - **Live service:** Cloud Run `advocate` (authenticated-only).
 
 ## Status
 Phases 1–3 complete and deployed; all nine build slices green and merged. Hardening +
-packaging (this slice) complete pending public-repo publish and the recorded video.
+packaging complete; the repo is public. Pending: the recorded video.
