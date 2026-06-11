@@ -70,3 +70,22 @@
 - **Bonus:** when adding an always-visible element (e.g. a colophon ledger) near a viewport-tight step,
   re-measure scroll — and CAP the new element's height (max-height + overflow) so later growth can't
   silently re-introduce the scroll.
+
+## [2026-06-11] [submission/docs] Scrub passes must be grep-verified repo-wide, not enumerated-file-only
+
+- **What went wrong:** The first public-copy scrub fixed the files named in the audit (devpost,
+  video script, CONTEXT) but left the same patterns live in README:3, pyproject.toml:4,
+  docs/DEMO_SCRIPT.md:14, docs/SUBMISSION.md:23 and the CHANGELOG genesis entry — a judge reading
+  the repo front door still hit everything the scrub was for. A second full pass was ordered.
+- **What to do instead:** A scrub's done-condition is a clean repo-wide grep for the banned
+  patterns (title, author, stat, framing), with every surviving hit explicitly classified
+  (nominative / dated history / code-internal) in the audit — never "the listed files were edited."
+
+## [2026-06-11] [workspace] One canonical home for submission artifacts, gitignored before the first file lands
+
+- **What went wrong:** submission/ accumulated across 6 worktrees, then got consolidated into a
+  side worktree and committed there — putting judge-access notes one push away from the public
+  repo and leaving the "which copy is real?" question open for days.
+- **What to do instead:** The moment an artifacts folder is conceived: pick the main worktree as
+  its only home, add it to .gitignore in the same breath, and verify `git log --all -- <dir>/`
+  stays empty. Never let an ignore-worthy directory exist in two worktrees at once.
