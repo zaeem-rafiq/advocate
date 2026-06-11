@@ -29,8 +29,8 @@ for sourcing). State in Firestore (per-user isolation). Runtime: Cloud Run (scal
 
 ```bash
 uv venv --python 3.12
-uv pip install pytest pytest-cov google-adk google-cloud-firestore
-uv run --no-project pytest                 # 266 passed, 1 skipped; pure-code core ~100% covered
+uv pip install pytest pytest-cov google-adk google-cloud-firestore "gradio>=5.50,<6"
+uv run --no-project pytest                 # 354 passed, 1 skipped; pure-code core ~100% covered
 python -m advocate.cli                     # offline deterministic tracer-bullet demo
 ```
 
