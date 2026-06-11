@@ -11,8 +11,21 @@ exists nowhere else. Target: SHIP with the demo video as the only open item.
       `python -m pytest` both green from a clean clone (354 passed, 1 skipped)
 - [x] Public-copy scrub, repo-wide: book title/81% out; one-agent/fifteen-FunctionTools wording;
       docs/DEMO_SCRIPT.md reduced to a pointer to the submission shooting script
-- [ ] Prompt 5 re-run (full compliance audit) → submission/compliance-report.md; target SHIP
+- [x] Prompt 5 re-run (full compliance audit) → submission/compliance-report.md — **SHIP**,
+      demo video the only open item (all 6 checks PASS; clean public clone green both commands)
 - [ ] Demo video (Prompt 6) — the only intended open item
+
+### Review — Submission gate (2026-06-11)
+- What changed: submission/ consolidated to the main worktree (untracked, gitignored; the one
+  commit that tracked it rewritten); advocate-ui opened for the judging window (IAP allUsers +
+  REQUIRE_IAP=0, rev 00016 — config-only); pyproject pythonpath fix; repo-wide public-copy scrub;
+  DEMO_SCRIPT.md reduced to a pointer (PR #12).
+- Verification: clean clone of the PUBLIC repo at fde2c78 — `uv run --no-project pytest` AND
+  `python -m pytest` both → 354 passed, 1 skipped; unauth GET on the UI → HTTP 200 Gradio app,
+  no redirect; ADK API → 403 unauth; gitleaks 95 commits no leaks; full audit in
+  submission/compliance-report.md (verdict: SHIP).
+- Issues found: none open except the intended one — demo video (Prompt 6). Residual flagged,
+  not blocking: deployed UI footer's person-attribution line (changing it = UI redeploy).
 
 # Previous Sprint — Agentic / AI-native + no-scroll redesign (2026-06-09)
 
