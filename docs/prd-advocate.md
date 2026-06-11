@@ -18,17 +18,18 @@
 
 ### What Advocate Is
 
-Advocate is a multi-agent AI system that operationalizes **Steve Dalton's 2-Hour Job Search**
-methodology end to end. It builds a ranked target-employer list, drafts compliant networking
+Advocate is a multi-agent AI system that operationalizes the **networking-first job search**
+end to end. It builds a ranked target-employer list, drafts compliant networking
 outreach, enforces the 3B7 follow-up cadence, and prepares users for informational interviews —
 **never sending anything without the user's explicit approval of that specific message.**
 
 ### The Problem
 
 Job seekers — especially career switchers — spend weeks mass-applying to postings, the channel
-that drives **under 10%** of hires and is collapsing under AI-generated application spam. The
-channel that actually drives **~81%** of hires (relationship-based networking) is high-effort,
-emotionally taxing, and unstructured, so most people do it inconsistently or avoid it.
+that drives **under 10%** of hires and is collapsing under AI-generated application spam.
+Networking is how jobs actually get found — yet relationship-based networking is high-effort,
+emotionally taxing, and unstructured, so most people do it inconsistently or avoid it. Almost
+nobody runs it as a process.
 
 The failure mode is not ignorance — career changers know networking works. The failure is
 **execution**:
@@ -66,7 +67,7 @@ feed rankings.
 | Age / background | 34, EMBA + 8 years management consulting |
 | Goal | Transition into a product role at a climate-tech company |
 | Current behavior | ~40 applications sent, 2 replies; relies on job boards |
-| Pain points | Freezes at the blank LinkedIn search bar; limited evening hours; drops follow-up when busy |
+| Pain points | Freezes at the blank search bar; limited evening hours; drops follow-up when busy |
 | Relationship to method | Has heard of informational interviews; has not done them systematically |
 | Tech comfort | High; uses Notion, Slack, Gmail; will not tolerate clunky UX |
 | Trust threshold | Will not send anything she hasn't personally reviewed |
@@ -79,7 +80,7 @@ feed rankings.
 | Budget holder | Career-center operating budget; sometimes the employer-relations fund |
 | Success metric | Employment within 6 months of graduation; median salary; employer NPS |
 | Current workflow | 1:1 coaching, spreadsheet templates, manual follow-up reminders |
-| Pain point | Cannot scale the 2-Hour Job Search method across a cohort of 200+ students |
+| Pain point | Cannot scale the networking-first job search across a cohort of 200+ students |
 | Buying trigger | A pilot that shows measurable outcome lift vs. their current cohort baseline |
 | v1 ask | At least one signed LOI; full admin console is v2 |
 
@@ -190,7 +191,7 @@ active-five, the compliance gate) are **pure code, no LLM** — the model propos
 | S-1 | Accept user inputs: industry (multi-select or freeform), geography (metro/region), function. |
 | S-2 | Produce ≥ 40 distinct employers via grounded web search across four lenses: (a) dream companies, (b) peer companies, (c) alumni employers from the uploaded CSV, (d) companies with active relevant postings / growth signals. |
 | S-3 | Each record includes: company name, industry, HQ location, source lens(es), and a one-line rationale. |
-| S-4 | All sourcing uses permitted APIs or public web; **no scraping** of LinkedIn, Indeed, or any ToS-prohibited source. |
+| S-4 | All sourcing uses permitted APIs or public web; **no scraping** of job boards or any ToS-prohibited source (blocked-domain list in `docs/DATA_SOURCES.md`). |
 | S-5 | Alumni matching uses only user-provided data (CSV upload or connected institutional directory). |
 
 ### Capability 2 — Ranking *(deterministic; see §7 for the full spec + test fixture)*
@@ -278,7 +279,7 @@ active-five, the compliance gate) are **pure code, no LLM** — the model propos
 |----|-------------|
 | NFR-1 | Built on Google's **Gemini Enterprise Agent Platform** (the evolution of Vertex AI Agent Builder): **ADK** (multi-agent orchestration) + **Gemini on Vertex AI**, deployed on **Cloud Run** (decided — not the managed Agent Runtime, formerly Agent Engine). |
 | NFR-2 | Grounding via **Google Search grounding** (Gemini's built-in `google_search` tool) for sourcing and TIARA research. *(As-built: `types.Tool(google_search=...)`; Vertex AI Search — a separate RAG product — is not used.)* |
-| NFR-3 | Third-party data use complies with source terms — **no scraping** of LinkedIn/Indeed/Glassdoor/ZipRecruiter; APIs, exports, or user-pasted data only *(disqualification risk per contest rules; enforced in code)*. |
+| NFR-3 | Third-party data use complies with source terms — **no scraping** of job boards (blocked-domain list in `docs/DATA_SOURCES.md`); APIs, exports, or user-pasted data only *(disqualification risk per contest rules; enforced in code)*. |
 | NFR-4 | Drafted emails must pass the automated binary eval gate before being surfaced. |
 | NFR-5 | The end-to-end flow must be demonstrable in a 1–2 minute video for judging (see `docs/DEMO_SCRIPT.md`). |
 
@@ -476,7 +477,7 @@ CSV export from Screen 4 (P-5) is sufficient for a career center to review stude
 |------|-----------|
 | Resume tailoring / autofill | Different product surface; out of methodology scope (networking-first by design) |
 | Autonomous sending | Core guardrail; human-in-the-loop per-message approval is non-negotiable |
-| Scraping LinkedIn / Indeed / any ToS-prohibited source | Legal and ethical non-starter |
+| Scraping job boards / any ToS-prohibited source | Legal and ethical non-starter |
 | Career-center admin console | Buyer feature; v1 pilot validated by LOI, not feature completeness |
 | Mobile app | Web-first; Priya does this work at a laptop |
 | Non-English outreach | Localization deferred |

@@ -217,8 +217,8 @@ on the request path imports it). Reversible: yes (roll traffic back to a prior r
   - Cloud Trace enabled (`trace_to_cloud=True`); required adding
     `opentelemetry-exporter-gcp-trace` (first deploy crash-looped without it — prior revision
     kept serving, no outage). Granted `roles/cloudtrace.agent` to `advocate-run`.
-  - Guardrails: no-send is structural (test asserts no SMTP/Gmail-send anywhere); LinkedIn/
-    Indeed/Glassdoor/ZipRecruiter scraping blocked in code.
+  - Guardrails: no-send is structural (test asserts no SMTP/Gmail-send anywhere); job-board
+    scraping blocked in code (blocked-domain list in `docs/DATA_SOURCES.md`).
   - Docs written: ARCHITECTURE, DATA_SOURCES, DEMO_SCRIPT, SUBMISSION; README usage; CHANGELOG.
 
 - **OPEN — outward-facing items (need explicit approval).**

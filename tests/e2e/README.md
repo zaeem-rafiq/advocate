@@ -1,7 +1,7 @@
 # Advocate E2E suite (deployed)
 
 End-to-end tests that drive the **deployed** Advocate ADK service on Cloud Run
-(not local mocks). They assert each stage of the 2-Hour Job Search pipeline
+(not local mocks). They assert each stage of the networking-first job-search pipeline
 (LAMP → 3B7 → TIARA) produced its required artifact, and gate subjective output
 (email / TIARA-question quality) with an LLM judge.
 

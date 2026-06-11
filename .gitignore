@@ -26,3 +26,6 @@ orchestrator-data/
 # No PNGs are tracked at the repo root; real image assets live under subdirectories.
 .playwright-mcp/
 /*.png
+# Submission workspace (judge access notes/credentials, contest drafts) — lives ONLY in
+# the main worktree and must NEVER be tracked or pushed to this public repo.
+submission/

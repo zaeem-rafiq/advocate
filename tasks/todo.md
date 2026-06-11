@@ -1,4 +1,20 @@
-# Current Sprint — Agentic / AI-native + no-scroll redesign (2026-06-09)
+# Current Sprint — Submission gate (2026-06-11)
+
+Canonical workspace = the main worktree; `submission/` is untracked here (gitignored) and
+exists nowhere else. Target: SHIP with the demo video as the only open item.
+
+- [x] Workspace: `submission/` moved from the festive-hypatia worktree; `.gitignore` covers it;
+      the one unpushed commit that tracked it was rewritten (no commit on any branch carries it)
+- [x] Judging access: `advocate-ui` public for the window (IAP `allUsers` + `REQUIRE_IAP=0`,
+      rev 00016) — unauth GET = 200 app, no redirect; ADK API stays IAM-locked (403)
+- [x] Reproduce path: `pythonpath = ["."]` in pyproject — `uv run --no-project pytest` and
+      `python -m pytest` both green from a clean clone (354 passed, 1 skipped)
+- [x] Public-copy scrub, repo-wide: book title/81% out; one-agent/fifteen-FunctionTools wording;
+      docs/DEMO_SCRIPT.md reduced to a pointer to the submission shooting script
+- [ ] Prompt 5 re-run (full compliance audit) → submission/compliance-report.md; target SHIP
+- [ ] Demo video (Prompt 6) — the only intended open item
+
+# Previous Sprint — Agentic / AI-native + no-scroll redesign (2026-06-09)
 
 Direction (user-approved): **The Standing Advocate's Worklog** — the dark cover plate docks to a
 persistent ~64px agent header after step 0; the agent remembers targets, visibly works the grounded
