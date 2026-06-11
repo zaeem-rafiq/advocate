@@ -48,9 +48,9 @@ See `docs/ARCHITECTURE.md` (diagram + layering). Tests: `uv run --no-project pyt
 
 ## Links
 - **Repo:** https://github.com/zaeem-rafiq/advocate (public)
-- **Demo video (1–2 min):** <VIDEO_URL — to be recorded>
+- **Demo video (1:51):** https://drive.google.com/file/d/17X19BKN4cPem0gZgdrbOZBS9K7A72-d_/view?usp=drive_link
 - **Live service:** Cloud Run `advocate` (authenticated-only).
 
 ## Status
 Phases 1–3 complete and deployed; all nine build slices green and merged. Hardening +
-packaging complete; the repo is public. Pending: the recorded video.
+packaging complete; the repo is public; the demo video is recorded and linked above.
