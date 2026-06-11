@@ -1,7 +1,7 @@
 # Advocate — Google for Startups AI Agents Challenge (Track 1)
 
 ## What it is
-Advocate is a multi-agent system that runs the **networking-first job search**
+Advocate is a single AI agent — one ADK orchestrator with fifteen function tools — that runs the **networking-first job search**
 (LAMP → 3B7 → TIARA) end to end. Networking is how jobs actually get found. Almost
 nobody runs it as a process. Advocate turns it into a structured, agent-run
 workflow: source target employers, rank them, draft connection-first outreach, enforce the

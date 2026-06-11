@@ -1,6 +1,6 @@
 # Architecture — Advocate
 
-Advocate is a multi-agent system on Google's **Gemini Enterprise Agent Platform** — built with
+Advocate is a single root agent coordinating fifteen function tools on Google's **Gemini Enterprise Agent Platform** — built with
 the **Agent Development Kit (ADK)** and **Gemini on Vertex AI** — deployed to **Cloud Run**
 (scale-to-zero) with **Firestore** for per-user state.
 
