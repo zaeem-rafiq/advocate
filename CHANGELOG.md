@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-06-11 — Pre-submission audit fixes: scrub gaps closed (docs framing + UI seal)
+
+No agent/pipeline behavior changed. Files: `docs/ARCHITECTURE.md`, `docs/SUBMISSION.md`,
+`advocate/ui/app.py`.
+
+- **One-root-agent framing completed.** The earlier scrub missed two "multi-agent system"
+  openers — `docs/ARCHITECTURE.md:3` and `docs/SUBMISSION.md:4` now use the as-built
+  **one root agent + fifteen function tools** framing.
+- **Seal micro-type made trademark-safe.** The wax-seal `<textPath>` in `advocate/ui/app.py`
+  read "THE TWO-HOUR JOB SEARCH" (the book title, judge-facing); now "NETWORKING-FIRST METHOD"
+  (aria-label updated to match). Arc fit measured in-browser: text 113.0 on the 122.5-unit
+  arc (the longer "A NETWORKING-FIRST JOB SEARCH" clipped at 136.4). 354 tests pass.
+
 ## 2026-06-11 — Submission readiness: reproduce-path fix, public-copy scrub, judging-window access
 
 No agent/pipeline behavior changed. Files: `pyproject.toml`, `README.md`, `.gitignore`,

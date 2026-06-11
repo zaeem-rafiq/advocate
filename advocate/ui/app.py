@@ -99,13 +99,13 @@ def _seal_svg() -> str:
     """A filled wax-stamp roundel: oxblood disc, cream 'A' monogram, curved micro-type, a fleuron."""
     return (
         '<svg class="seal-svg" viewBox="0 0 100 100" role="img" '
-        'aria-label="Advocate seal — the two-hour job search" xmlns="http://www.w3.org/2000/svg">'
+        'aria-label="Advocate seal — the networking-first method" xmlns="http://www.w3.org/2000/svg">'
         '<defs><path id="seal-arc" d="M50 50 m-39 0 a39 39 0 0 1 78 0"/></defs>'
         '<circle cx="50" cy="50" r="48" class="seal-disc"/>'
         '<circle cx="50" cy="50" r="44" class="seal-ringline"/>'
         '<circle cx="50" cy="50" r="35" class="seal-ringline"/>'
         '<text class="seal-ring"><textPath href="#seal-arc" startOffset="50%" '
-        'text-anchor="middle">THE TWO-HOUR JOB SEARCH</textPath></text>'
+        'text-anchor="middle">NETWORKING-FIRST METHOD</textPath></text>'
         '<text x="50" y="51" class="seal-mono" text-anchor="middle" dominant-baseline="central">A</text>'
         '<text x="50" y="83" class="seal-fleuron" text-anchor="middle">&#10087;</text>'
         '</svg>'
