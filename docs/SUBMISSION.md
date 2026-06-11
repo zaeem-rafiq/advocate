@@ -1,15 +1,15 @@
 # Advocate — Google for Startups AI Agents Challenge (Track 1)
 
 ## What it is
-Advocate is a multi-agent system that runs Steve Dalton's **2-Hour Job Search**
-(LAMP → 3B7 → TIARA) end to end. It turns the highest-yield but most-avoided job-search
-channel — relationship-based networking (~81% of hires) — into a structured, agent-run
+Advocate is a multi-agent system that runs the **networking-first job search**
+(LAMP → 3B7 → TIARA) end to end. Networking is how jobs actually get found. Almost
+nobody runs it as a process. Advocate turns it into a structured, agent-run
 workflow: source target employers, rank them, draft connection-first outreach, enforce the
 follow-up cadence, prepare informational interviews, and keep relationships warm.
 
 ## The problem
 AI made applications free to send, so volume per posting exploded while the networking
-advantage became scarcer and more valuable. Career switchers freeze at the blank LinkedIn
+advantage became scarcer and more valuable. Career switchers freeze at the blank
 search bar. Career centers teach the structured fix by hand, one cohort at a time — nothing
 runs it. **Buyer:** university career centers (measured on employment outcomes that drive
 rankings). **End user:** the job seeker.
@@ -20,8 +20,9 @@ Builder), drawing primarily on the **Build** pillar plus **Optimize** (Cloud Tra
 evaluation). **Scale** and **Govern** run on core GCP rather than the platform's managed agent
 services — a deliberate, cost-driven choice (see `docs/DECISIONS.md`).
 
-- **Agent Development Kit (ADK)** *(Build)*: root orchestrator + a grounded Sourcing sub-agent,
-  over deterministic function tools.
+- **Agent Development Kit (ADK)** *(Build)*: one root agent coordinating fifteen
+  `FunctionTool`s; specialist roles (Sourcing, Drafting, TIARA Prep) run inside them as
+  bounded tool-loops — the LLM proposes, pure code enforces.
 - **Gemini on Vertex AI** *(Build)*: Flash for routine steps, Pro for sourcing + research.
 - **Google Search grounding** *(Build)*: sourcing employers and TIARA research — no scraping.
 - **Cloud Run** (scale-to-zero) + **Firestore** per-user state *(Scale — self-hosted, not the
@@ -37,7 +38,7 @@ services — a deliberate, cost-driven choice (see `docs/DECISIONS.md`).
   code enforces.
 - **Email is draft-only** — there is no send capability in the codebase (verified by test).
 - **ToS-safe by construction** — alumni from a user export; sourcing/research via Google
-  grounding; LinkedIn/Indeed scraping blocked in code. See `docs/DATA_SOURCES.md`.
+  grounding; job-board scraping blocked in code. See `docs/DATA_SOURCES.md`.
 - **Autonomous over time** — the 3B7 cadence acts across days: silence advances to the next
   contact; responders are classified by latency; follow-ups are scheduled automatically.
 
@@ -47,7 +48,7 @@ See `docs/ARCHITECTURE.md` (diagram + layering). Tests: `uv run --no-project pyt
 
 ## Links
 - **Repo:** https://github.com/zaeem-rafiq/advocate (public)
-- **Demo video (1–2 min):** <VIDEO_URL — to be recorded; script in docs/DEMO_SCRIPT.md>
+- **Demo video (1–2 min):** <VIDEO_URL — to be recorded>
 - **Live service:** Cloud Run `advocate` (authenticated-only).
 
 ## Status

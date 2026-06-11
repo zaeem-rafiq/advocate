@@ -1,6 +1,6 @@
 # Advocate
 
-Agentic implementation of Steve Dalton's **2-Hour Job Search** (LAMP → 3B7 → TIARA),
+Agentic implementation of the **networking-first job search** (LAMP → 3B7 → TIARA),
 built on Google's **Gemini Enterprise Agent Platform** — ADK + Gemini on Vertex AI — for the
 Google for Startups AI Agents Challenge.
 
@@ -14,14 +14,15 @@ prepares TIARA questions for informational interviews.
 
 ## Architecture
 
-Root ADK orchestrator delegating to sub-agents: Sourcing, Affiliation, Postings,
-Drafting, Scheduler, Prep, Follow-up. Reasoning on Gemini (Flash for routine steps, Pro
-for sourcing). State in Firestore (per-user isolation). Runtime: Cloud Run (scale-to-zero).
+One root ADK agent coordinating fifteen `FunctionTool`s; specialist roles (Sourcing,
+Drafting, TIARA Prep) run inside them as bounded tool-loops — the LLM proposes, pure
+code enforces. Reasoning on Gemini (Flash for routine steps, Pro for sourcing). State
+in Firestore (per-user isolation). Runtime: Cloud Run (scale-to-zero).
 
 ## Guardrails
 
 - Email is **draft-only** — never sent autonomously.
-- Posting signal from Google Search grounding; no scraping of LinkedIn/Indeed.
+- Posting signal from Google Search grounding; no scraping of job boards or professional networks.
 - Alumni read from a user-provided CSV/export — no third-party scraping.
 - The M→P→A ranker is pure code (no LLM), fully unit-tested.
 

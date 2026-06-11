@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-06-11 — Submission readiness: reproduce-path fix, public-copy scrub, judging-window access
+
+No agent/pipeline behavior changed. Files: `pyproject.toml`, `README.md`, `.gitignore`,
+`docs/{SUBMISSION,DEMO_SCRIPT,DECISIONS,prd-advocate}.md`, `tests/e2e/README.md`, `tasks/todo.md`.
+
+- **Reproduce path fixed.** `pythonpath = ["."]` added to `[tool.pytest.ini_options]` (approved
+  one-line exception to the build freeze) so the documented `uv run --no-project pytest` collects
+  from a clean clone — bare pytest does not put the repo root on `sys.path`, which produced
+  35 collection errors. Verified from a clean clone: **354 passed, 1 skipped** via both
+  `uv run --no-project pytest` and `python -m pytest`.
+- **Public-copy scrub (repo-wide).** Book title/author removed from README:3, pyproject:4,
+  docs/SUBMISSION.md, docs/prd-advocate.md, the CHANGELOG genesis entry, and tests/e2e/README.md;
+  the uncited 81%/8-in-10 stat replaced with "Networking is how jobs actually get found. Almost
+  nobody runs it as a process."; architecture wording aligned everywhere to the as-built
+  **one root agent + fifteen `FunctionTool`s** (tool-loop) framing. Nominative uses kept: the
+  blocked-domain list (docs/DATA_SOURCES.md, guardrails code/tests) and dated engineering history
+  (docs/DECISIONS.md, planning docs).
+- **docs/DEMO_SCRIPT.md reduced to a pointer** — superseded by the maintained shooting script in
+  the untracked submission workspace; all existing links to it still resolve.
+- **`.gitignore`: `submission/`** — the submission workspace (judge access notes) lives only in the
+  main worktree and is never tracked in this public repo.
+- **Judging window opened on `advocate-ui`** (config-only, no image rebuild): IAP `allUsers`
+  accessor + `REQUIRE_IAP=0` (revision 00016) — unauthenticated GET now returns the app (200,
+  no sign-in redirect); the ADK API service stays IAM-locked (403 unauthenticated).
+
 ## 2026-06-09 — Phase D: the command line (deterministic NL router; agentic redesign complete)
 
 A persistent natural-language command line steers the sprint — the last piece of the agentic redesign.
@@ -738,7 +763,7 @@ cases, anti-goals) into the canonical `docs/prd-advocate.md` and locked seven pr
 
 ## 2026-06-06 — Phase 1–3 build complete, all 9 slices merged
 
-Autonomous build of Advocate (agentic 2-Hour Job Search) on Google ADK + Gemini on
+Autonomous build of Advocate (the agentic networking-first job search) on Google ADK + Gemini on
 Vertex AI, deployed to Cloud Run with Firestore state.
 
 - **#1 Scaffold + ranked top-5** — ADK orchestrator + grounded Sourcing agent, pure-code

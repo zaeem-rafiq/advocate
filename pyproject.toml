@@ -1,7 +1,7 @@
 [project]
 name = "advocate"
 version = "0.1.0"
-description = "Advocate — agentic 2-Hour Job Search (LAMP -> 3B7 -> TIARA) on Google's Gemini Enterprise Agent Platform (ADK + Gemini on Vertex AI)"
+description = "Advocate — the agentic networking-first job search (LAMP -> 3B7 -> TIARA) on Google's Gemini Enterprise Agent Platform (ADK + Gemini on Vertex AI)"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -56,6 +56,9 @@ packages = ["advocate"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+# So the documented reproduce command (`uv run --no-project pytest`) collects from a
+# clean clone without an editable install.
+pythonpath = ["."]
 
 [tool.coverage.run]
 source = ["advocate"]
